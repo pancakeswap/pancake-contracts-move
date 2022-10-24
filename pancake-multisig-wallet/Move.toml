@@ -1,0 +1,23 @@
+[package]
+name = "PancakeMultisigWallet"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "83641d3f083762f31700060e5e95fbb1cbc28bf0" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "83641d3f083762f31700060e5e95fbb1cbc28bf0" }
+
+[addresses]
+# pancake_multisig_wallet = ""
+# pancake_multisig_wallet_dev = ""
+
+# devnet
+# pancake_multisig_wallet = "85cfa9fa44e48478e7948a6d1de45973ee592ec53ecb2036eebd413d5cf198b6"
+# pancake_multisig_wallet_dev = "dae5bad09b4a742117719d29bd8be079068278901001470ac252decfbbc5f70f"
+
+# For testing
+pancake_multisig_wallet = "fb81ae07266f00a0ebb8dbdd70436adcaef40181cf704279490e1107bf6fff4b"
+pancake_multisig_wallet_dev = "2eed2ddc368eeaa79382a342cb79a3cb7bb2c21eafd62fe70305fcb68b92ccb0"
+multisig_wallet = "8f84810725b0a2ebd300ae7b961342f72df1f3c6adc9ba8272ab199e27afb119"
+multisig_wallet_owner1 = "c26b4d391801b438e7c33c87dc29ea7aebae4619cd089c2b88f03d71c5db46df"
+multisig_wallet_owner2 = "0415254fd345376da97dfecfdbdce1633cb74715aeca50d9d5c904bba7d842aa"
+multisig_wallet_owner3 = "795f79ab8dca3c33b154dcc876d7434368bd5a0b52210d5cd3074be89e16238f"

@@ -1,0 +1,15 @@
+[package]
+name = "ExampleMultisigWallet"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "72421d32d77f1877ded478e96f5b95914de1df91" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "72421d32d77f1877ded478e96f5b95914de1df91" }
+PancakeMultisigWallet = { local = "../../" }
+
+[addresses]
+example_multisig_wallet = "85e9711a54cff2e5b7db2d9583f5b5ff78024c80ebb80df31da753c9a2b78000"
+example_multisig_wallet_dev = "da9db7c9bda8b077db0b6e5ef7c6afd8ccdad84ba06fd9b96c789dce64cfe939"
+example_multisig_wallet_owner1 = "7ba51953163f85467b6c8329e3dc4cafc4c4e6e8cb4311a85d292a36e4fb3f32"
+example_multisig_wallet_owner2 = "ee45805c0c1133134969f0b7e4c335b2d686a2909f007334f40a36892baf23bf"
+example_multisig_wallet_owner3 = "e2779e742435ea6303dc97124949aeb0337ecc8cfab44b494f7f89d773dcb2fb"
