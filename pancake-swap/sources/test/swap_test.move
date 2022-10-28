@@ -14,8 +14,12 @@ module pancake::swap_test {
     const MAX_U64: u64 = 18446744073709551615;
     const MINIMUM_LIQUIDITY: u128 = 1000;
 
-    public fun setup_test(dev: &signer, admin: &signer, treasury: &signer, resource_account: &signer) {
+    public fun setup_test_with_genesis(dev: &signer, admin: &signer, treasury: &signer, resource_account: &signer) {
         genesis::setup();
+        setup_test(dev, admin, treasury, resource_account);
+    }
+
+    public fun setup_test(dev: &signer, admin: &signer, treasury: &signer, resource_account: &signer) {
         account::create_account_for_test(signer::address_of(dev));
         account::create_account_for_test(signer::address_of(admin));
         account::create_account_for_test(signer::address_of(treasury));
@@ -36,7 +40,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -87,7 +91,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -139,7 +143,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -169,7 +173,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -222,7 +226,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -251,7 +255,7 @@ module pancake::swap_test {
     ) {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -343,7 +347,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(user2));
         account::create_account_for_test(signer::address_of(user3));
         account::create_account_for_test(signer::address_of(user4));
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -487,7 +491,7 @@ module pancake::swap_test {
     ) {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -527,7 +531,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -609,7 +613,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -639,7 +643,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -670,7 +674,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -700,7 +704,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -784,7 +788,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -816,7 +820,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -847,7 +851,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -977,7 +981,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -1107,7 +1111,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -1285,7 +1289,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(bob));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -1470,7 +1474,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(user4));
         account::create_account_for_test(signer::address_of(alice));
 
-        setup_test(dev, admin, treasury, resource_account);
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
 
         let coin_owner = test_coins::init_coins();
 
@@ -1703,7 +1707,7 @@ module pancake::swap_test {
         swap::withdraw_fee<TestCAKE, TestBUSD>(treasury);
     }
 
-    fun calc_output_using_input(
+    public fun calc_output_using_input(
         input_x: u64,
         reserve_x: u64,
         reserve_y: u64
@@ -1711,7 +1715,7 @@ module pancake::swap_test {
         ((input_x as u128) * 9975u128 * (reserve_y as u128)) / (((reserve_x as u128) * 10000u128) + ((input_x as u128) * 9975u128))
     }
 
-    fun calc_input_using_output(
+    public fun calc_input_using_output(
         output_y: u64,
         reserve_x: u64,
         reserve_y: u64
@@ -1719,7 +1723,7 @@ module pancake::swap_test {
         ((output_y as u128) * 10000u128 * (reserve_x as u128)) / (9975u128 * ((reserve_y as u128) - (output_y as u128))) + 1u128
     }
 
-    fun calc_fee_lp(
+    public fun calc_fee_lp(
         total_lp_supply: u128,
         k: u128,
         k_last: u128,
