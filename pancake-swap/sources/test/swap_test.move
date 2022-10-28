@@ -16,6 +16,10 @@ module pancake::swap_test {
 
     public fun setup_test(dev: &signer, admin: &signer, treasury: &signer, resource_account: &signer) {
         genesis::setup();
+        initialize_liquidity_pool(dev, admin, treasury, resource_account);
+    }
+
+    public fun initialize_liquidity_pool(dev: &signer, admin: &signer, treasury: &signer, resource_account: &signer) {
         account::create_account_for_test(signer::address_of(dev));
         account::create_account_for_test(signer::address_of(admin));
         account::create_account_for_test(signer::address_of(treasury));
