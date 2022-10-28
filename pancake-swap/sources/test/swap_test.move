@@ -19,7 +19,7 @@ module pancake::swap_test {
         account::create_account_for_test(signer::address_of(dev));
         account::create_account_for_test(signer::address_of(admin));
         account::create_account_for_test(signer::address_of(treasury));
-        resource_account::create_resource_account(dev, b"seed", x"");
+        resource_account::create_resource_account(dev, b"pancake", x"");
         initialize(resource_account);
         swap::set_fee_to(admin, signer::address_of(treasury))
     }
