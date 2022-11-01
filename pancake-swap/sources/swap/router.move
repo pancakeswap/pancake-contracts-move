@@ -83,6 +83,20 @@ module pancake::router {
         }
     }
 
+    fun add_swap_event_with_address_internal<X, Y>(
+        sender_addr: address,
+        amount_x_in: u64,
+        amount_y_in: u64,
+        amount_x_out: u64,
+        amount_y_out: u64
+    ) {
+        if (swap_utils::sort_token_type<X, Y>()){
+            swap::add_swap_event_with_address<X, Y>(sender_addr, amount_x_in, amount_y_in, amount_x_out, amount_y_out);
+        } else {
+            swap::add_swap_event_with_address<Y, X>(sender_addr, amount_y_in, amount_x_in, amount_y_out, amount_x_out);
+        }
+    }
+
     fun add_swap_event_internal<X, Y>(
         sender: &signer,
         amount_x_in: u64,
@@ -90,11 +104,8 @@ module pancake::router {
         amount_x_out: u64,
         amount_y_out: u64
     ) {
-        if (swap_utils::sort_token_type<X, Y>()){
-            swap::add_swap_event<X, Y>(sender, amount_x_in, amount_y_in, amount_x_out, amount_y_out);
-        } else {
-            swap::add_swap_event<Y, X>(sender, amount_y_in, amount_x_in, amount_y_out, amount_x_out);
-        }
+        let sender_addr = signer::address_of(sender);
+        add_swap_event_with_address_internal<X, Y>(sender_addr, amount_x_in, amount_y_in, amount_x_out, amount_y_out);
     }
 
     /// Swap exact input amount of X to maxiumin possible amount of Y
@@ -144,6 +155,16 @@ module pancake::router {
             coin::destroy_zero(x_out);
             y_out
         }
+    }
+
+    public fun swap_exact_x_to_y_direct_external<X, Y>(x_in: coin::Coin<X>): coin::Coin<Y> {
+        is_pair_created_internal<X, Y>();
+        let x_in_amount = coin::value(&x_in);
+        let is_x_to_y = swap_utils::sort_token_type<X, Y>();
+        let y_out = get_intermediate_output<X, Y>(is_x_to_y, x_in);
+        let y_out_amount = coin::value(&y_out);
+        add_swap_event_with_address_internal<X, Y>(@zero, x_in_amount, 0, 0, y_out_amount);
+        y_out
     }
 
     fun get_intermediate_output_x_to_exact_y<X, Y>(is_x_to_y: bool, x_in: coin::Coin<X>, amount_out: u64): coin::Coin<Y> {

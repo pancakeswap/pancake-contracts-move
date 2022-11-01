@@ -331,6 +331,27 @@ module pancake::swap {
             }
         );
     }
+
+    public(friend) fun add_swap_event_with_address<X, Y>(
+        sender_addr: address,
+        amount_x_in: u64,
+        amount_y_in: u64,
+        amount_x_out: u64,
+        amount_y_out: u64
+    ) acquires PairEventHolder {
+        let pair_event_holder = borrow_global_mut<PairEventHolder<X, Y>>(RESOURCE_ACCOUNT);
+        event::emit_event<SwapEvent<X, Y>>(
+            &mut pair_event_holder.swap,
+            SwapEvent<X, Y> {
+                user: sender_addr,
+                amount_x_in,
+                amount_y_in,
+                amount_x_out,
+                amount_y_out
+            }
+        );
+    }
+
     /// Add more liquidity to token types. This method explicitly assumes the
     /// min of both tokens are 0.
     fun add_liquidity_direct<X, Y>(
