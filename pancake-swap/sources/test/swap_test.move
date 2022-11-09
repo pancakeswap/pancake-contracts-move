@@ -840,6 +840,283 @@ module pancake::swap_test {
     }
 
     #[test(dev = @dev, admin = @default_admin, resource_account = @pancake, treasury = @0x23456, bob = @0x12345, alice = @0x12346)]
+    fun test_swap_x_to_exact_y_direct_external(
+        dev: &signer,
+        admin: &signer,
+        resource_account: &signer,
+        treasury: &signer,
+        bob: &signer,
+        alice: &signer,
+    ) {
+        account::create_account_for_test(signer::address_of(bob));
+        account::create_account_for_test(signer::address_of(alice));
+
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
+
+        let coin_owner = test_coins::init_coins();
+
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, bob, 100 * pow(10, 8));
+        test_coins::register_and_mint<TestBUSD>(&coin_owner, bob, 100 * pow(10, 8));
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, alice, 100 * pow(10, 8));
+
+        let initial_reserve_x = 5 * pow(10, 8);
+        let initial_reserve_y = 10 * pow(10, 8);
+        let output_y = 166319299;
+        // let input_x_max = 1 * pow(10, 8);
+
+        // bob provider liquidity for 5:10 CAKE-BUSD
+        router::add_liquidity<TestCAKE, TestBUSD>(bob, initial_reserve_x, initial_reserve_y, 0, 0);
+        let bob_suppose_lp_balance = math::sqrt(((initial_reserve_x as u128) * (initial_reserve_y as u128))) - MINIMUM_LIQUIDITY;
+        let suppose_total_supply = bob_suppose_lp_balance + MINIMUM_LIQUIDITY;
+
+        let alice_addr = signer::address_of(alice);
+
+        let alice_token_x_before_balance = coin::balance<TestCAKE>(alice_addr);
+
+        let input_x = calc_input_using_output(output_y, initial_reserve_x, initial_reserve_y); 
+
+        let x_in_amount = router::get_amount_in<TestCAKE, TestBUSD>(output_y);
+        assert!(x_in_amount == (input_x as u64), 102);
+
+        let input_x_coin = coin::withdraw(alice, (input_x as u64));
+
+        let (x_out, y_out) =  router::swap_x_to_exact_y_direct_external<TestCAKE, TestBUSD>(input_x_coin, output_y);
+
+        assert!(coin::value(&x_out) == 0, 101);
+        assert!(coin::value(&y_out) == output_y, 100);
+        coin::register<TestBUSD>(alice);
+        coin::deposit<TestCAKE>(alice_addr, x_out);
+        coin::deposit<TestBUSD>(alice_addr, y_out);
+
+        let alice_token_x_after_balance = coin::balance<TestCAKE>(alice_addr);
+        let alice_token_y_after_balance = coin::balance<TestBUSD>(alice_addr);
+
+        let new_reserve_x = initial_reserve_x + (input_x as u64);
+        let new_reserve_y = initial_reserve_y - output_y;
+
+        let (reserve_y, reserve_x, _) = swap::token_reserves<TestBUSD, TestCAKE>();
+        assert!((alice_token_x_before_balance - alice_token_x_after_balance) == (input_x as u64), 99);
+        assert!(alice_token_y_after_balance == output_y, 98);
+        assert!(reserve_x == new_reserve_x, 97);
+        assert!(reserve_y == new_reserve_y, 96);
+
+        let bob_token_x_before_balance = coin::balance<TestCAKE>(signer::address_of(bob));
+        let bob_token_y_before_balance = coin::balance<TestBUSD>(signer::address_of(bob));
+
+        router::remove_liquidity<TestCAKE, TestBUSD>(bob, (bob_suppose_lp_balance as u64), 0, 0);
+
+        let bob_token_x_after_balance = coin::balance<TestCAKE>(signer::address_of(bob));
+        let bob_token_y_after_balance = coin::balance<TestBUSD>(signer::address_of(bob));
+
+        let suppose_k_last = ((initial_reserve_x * initial_reserve_y) as u128);
+        let suppose_k = ((new_reserve_x * new_reserve_y) as u128);
+        let suppose_fee_amount = calc_fee_lp(suppose_total_supply, suppose_k, suppose_k_last);
+        suppose_total_supply = suppose_total_supply + suppose_fee_amount;
+
+        let bob_remove_liquidity_x = ((new_reserve_x) as u128) * bob_suppose_lp_balance / suppose_total_supply;
+        let bob_remove_liquidity_y = ((new_reserve_y) as u128) * bob_suppose_lp_balance / suppose_total_supply;
+        new_reserve_x = new_reserve_x - (bob_remove_liquidity_x as u64);
+        new_reserve_y = new_reserve_y - (bob_remove_liquidity_y as u64);
+        suppose_total_supply = suppose_total_supply - bob_suppose_lp_balance;
+
+        assert!((bob_token_x_after_balance - bob_token_x_before_balance) == (bob_remove_liquidity_x as u64), 95);
+        assert!((bob_token_y_after_balance - bob_token_y_before_balance) == (bob_remove_liquidity_y as u64), 94);
+
+        swap::withdraw_fee<TestCAKE, TestBUSD>(treasury);
+        let treasury_lp_after_balance = coin::balance<LPToken<TestBUSD, TestCAKE>>(signer::address_of(treasury));
+        router::remove_liquidity<TestCAKE, TestBUSD>(treasury, (suppose_fee_amount as u64), 0, 0);
+        let treasury_token_x_after_balance = coin::balance<TestCAKE>(signer::address_of(treasury));
+        let treasury_token_y_after_balance = coin::balance<TestBUSD>(signer::address_of(treasury));
+
+        let treasury_remove_liquidity_x = ((new_reserve_x) as u128) * suppose_fee_amount / suppose_total_supply;
+        let treasury_remove_liquidity_y = ((new_reserve_y) as u128) * suppose_fee_amount / suppose_total_supply;
+
+        assert!(treasury_lp_after_balance == (suppose_fee_amount as u64), 93);
+        assert!(treasury_token_x_after_balance == (treasury_remove_liquidity_x as u64), 92);
+        assert!(treasury_token_y_after_balance == (treasury_remove_liquidity_y as u64), 91);
+    }
+
+    #[test(dev = @dev, admin = @default_admin, resource_account = @pancake, treasury = @0x23456, bob = @0x12345, alice = @0x12346)]
+    fun test_swap_x_to_exact_y_direct_external_with_more_x_in(
+        dev: &signer,
+        admin: &signer,
+        resource_account: &signer,
+        treasury: &signer,
+        bob: &signer,
+        alice: &signer,
+    ) {
+        account::create_account_for_test(signer::address_of(bob));
+        account::create_account_for_test(signer::address_of(alice));
+
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
+
+        let coin_owner = test_coins::init_coins();
+
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, bob, 100 * pow(10, 8));
+        test_coins::register_and_mint<TestBUSD>(&coin_owner, bob, 100 * pow(10, 8));
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, alice, 100 * pow(10, 8));
+
+        let initial_reserve_x = 5 * pow(10, 8);
+        let initial_reserve_y = 10 * pow(10, 8);
+        let output_y = 166319299;
+        // let input_x_max = 1 * pow(10, 8);
+
+        // bob provider liquidity for 5:10 CAKE-BUSD
+        router::add_liquidity<TestCAKE, TestBUSD>(bob, initial_reserve_x, initial_reserve_y, 0, 0);
+        let bob_suppose_lp_balance = math::sqrt(((initial_reserve_x as u128) * (initial_reserve_y as u128))) - MINIMUM_LIQUIDITY;
+        let suppose_total_supply = bob_suppose_lp_balance + MINIMUM_LIQUIDITY;
+
+        let alice_addr = signer::address_of(alice);
+
+        let alice_token_x_before_balance = coin::balance<TestCAKE>(alice_addr);
+
+        let input_x = calc_input_using_output(output_y, initial_reserve_x, initial_reserve_y); 
+
+        let x_in_more = 666666;
+
+        let input_x_coin = coin::withdraw(alice, (input_x as u64) + x_in_more);
+
+        let (x_out, y_out) =  router::swap_x_to_exact_y_direct_external<TestCAKE, TestBUSD>(input_x_coin, output_y);
+
+        assert!(coin::value(&x_out) == x_in_more, 101);
+        assert!(coin::value(&y_out) == output_y, 100);
+        coin::register<TestBUSD>(alice);
+        coin::deposit<TestCAKE>(alice_addr, x_out);
+        coin::deposit<TestBUSD>(alice_addr, y_out);
+
+        let alice_token_x_after_balance = coin::balance<TestCAKE>(alice_addr);
+        let alice_token_y_after_balance = coin::balance<TestBUSD>(alice_addr);
+
+        let new_reserve_x = initial_reserve_x + (input_x as u64);
+        let new_reserve_y = initial_reserve_y - output_y;
+
+        let (reserve_y, reserve_x, _) = swap::token_reserves<TestBUSD, TestCAKE>();
+        assert!((alice_token_x_before_balance - alice_token_x_after_balance) == (input_x as u64), 99);
+        assert!(alice_token_y_after_balance == output_y, 98);
+        assert!(reserve_x == new_reserve_x, 97);
+        assert!(reserve_y == new_reserve_y, 96);
+
+        let bob_token_x_before_balance = coin::balance<TestCAKE>(signer::address_of(bob));
+        let bob_token_y_before_balance = coin::balance<TestBUSD>(signer::address_of(bob));
+
+        router::remove_liquidity<TestCAKE, TestBUSD>(bob, (bob_suppose_lp_balance as u64), 0, 0);
+
+        let bob_token_x_after_balance = coin::balance<TestCAKE>(signer::address_of(bob));
+        let bob_token_y_after_balance = coin::balance<TestBUSD>(signer::address_of(bob));
+
+        let suppose_k_last = ((initial_reserve_x * initial_reserve_y) as u128);
+        let suppose_k = ((new_reserve_x * new_reserve_y) as u128);
+        let suppose_fee_amount = calc_fee_lp(suppose_total_supply, suppose_k, suppose_k_last);
+        suppose_total_supply = suppose_total_supply + suppose_fee_amount;
+
+        let bob_remove_liquidity_x = ((new_reserve_x) as u128) * bob_suppose_lp_balance / suppose_total_supply;
+        let bob_remove_liquidity_y = ((new_reserve_y) as u128) * bob_suppose_lp_balance / suppose_total_supply;
+        new_reserve_x = new_reserve_x - (bob_remove_liquidity_x as u64);
+        new_reserve_y = new_reserve_y - (bob_remove_liquidity_y as u64);
+        suppose_total_supply = suppose_total_supply - bob_suppose_lp_balance;
+
+        assert!((bob_token_x_after_balance - bob_token_x_before_balance) == (bob_remove_liquidity_x as u64), 95);
+        assert!((bob_token_y_after_balance - bob_token_y_before_balance) == (bob_remove_liquidity_y as u64), 94);
+
+        swap::withdraw_fee<TestCAKE, TestBUSD>(treasury);
+        let treasury_lp_after_balance = coin::balance<LPToken<TestBUSD, TestCAKE>>(signer::address_of(treasury));
+        router::remove_liquidity<TestCAKE, TestBUSD>(treasury, (suppose_fee_amount as u64), 0, 0);
+        let treasury_token_x_after_balance = coin::balance<TestCAKE>(signer::address_of(treasury));
+        let treasury_token_y_after_balance = coin::balance<TestBUSD>(signer::address_of(treasury));
+
+        let treasury_remove_liquidity_x = ((new_reserve_x) as u128) * suppose_fee_amount / suppose_total_supply;
+        let treasury_remove_liquidity_y = ((new_reserve_y) as u128) * suppose_fee_amount / suppose_total_supply;
+
+        assert!(treasury_lp_after_balance == (suppose_fee_amount as u64), 93);
+        assert!(treasury_token_x_after_balance == (treasury_remove_liquidity_x as u64), 92);
+        assert!(treasury_token_y_after_balance == (treasury_remove_liquidity_y as u64), 91);
+    }
+
+    #[test(dev = @dev, admin = @default_admin, resource_account = @pancake, treasury = @0x23456, bob = @0x12345, alice = @0x12346)]
+    #[expected_failure(abort_code = 2)]
+    fun test_swap_x_to_exact_y_direct_external_with_less_x_in(
+        dev: &signer,
+        admin: &signer,
+        resource_account: &signer,
+        treasury: &signer,
+        bob: &signer,
+        alice: &signer,
+    ) {
+        account::create_account_for_test(signer::address_of(bob));
+        account::create_account_for_test(signer::address_of(alice));
+
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
+
+        let coin_owner = test_coins::init_coins();
+
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, bob, 100 * pow(10, 8));
+        test_coins::register_and_mint<TestBUSD>(&coin_owner, bob, 100 * pow(10, 8));
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, alice, 100 * pow(10, 8));
+
+        let initial_reserve_x = 5 * pow(10, 8);
+        let initial_reserve_y = 10 * pow(10, 8);
+        let output_y = 166319299;
+        // let input_x_max = 1 * pow(10, 8);
+
+        // bob provider liquidity for 5:10 CAKE-BUSD
+        router::add_liquidity<TestCAKE, TestBUSD>(bob, initial_reserve_x, initial_reserve_y, 0, 0);
+
+        let alice_addr = signer::address_of(alice);
+
+        let input_x = calc_input_using_output(output_y, initial_reserve_x, initial_reserve_y); 
+
+        let x_in_less = 66;
+
+        let input_x_coin = coin::withdraw(alice, (input_x as u64) - x_in_less);
+
+        let (x_out, y_out) =  router::swap_x_to_exact_y_direct_external<TestCAKE, TestBUSD>(input_x_coin, output_y);
+
+        coin::register<TestBUSD>(alice);
+        coin::deposit<TestCAKE>(alice_addr, x_out);
+        coin::deposit<TestBUSD>(alice_addr, y_out);
+    }
+
+    #[test(dev = @dev, admin = @default_admin, resource_account = @pancake, treasury = @0x23456, bob = @0x12345, alice = @0x12346)]
+    fun test_get_amount_in(
+        dev: &signer,
+        admin: &signer,
+        resource_account: &signer,
+        treasury: &signer,
+        bob: &signer,
+        alice: &signer,
+    ) {
+        account::create_account_for_test(signer::address_of(bob));
+        account::create_account_for_test(signer::address_of(alice));
+
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
+
+        let coin_owner = test_coins::init_coins();
+
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, bob, 100 * pow(10, 8));
+        test_coins::register_and_mint<TestBUSD>(&coin_owner, bob, 100 * pow(10, 8));
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, alice, 100 * pow(10, 8));
+
+        let initial_reserve_x = 5 * pow(10, 8);
+        let initial_reserve_y = 10 * pow(10, 8);
+        let output_y = 166319299;
+        let output_x = 166319299;
+        // let input_x_max = 1 * pow(10, 8);
+
+        // bob provider liquidity for 5:10 CAKE-BUSD
+        router::add_liquidity<TestCAKE, TestBUSD>(bob, initial_reserve_x, initial_reserve_y, 0, 0);
+
+        let input_x = calc_input_using_output(output_y, initial_reserve_x, initial_reserve_y); 
+
+        let x_in_amount = router::get_amount_in<TestCAKE, TestBUSD>(output_y);
+        assert!(x_in_amount == (input_x as u64), 102);
+
+        let input_y = calc_input_using_output(output_x, initial_reserve_y, initial_reserve_x); 
+
+        let y_in_amount = router::get_amount_in<TestBUSD, TestCAKE>(output_x);
+        assert!(y_in_amount == (input_y as u64), 101);
+    }
+
+    #[test(dev = @dev, admin = @default_admin, resource_account = @pancake, treasury = @0x23456, bob = @0x12345, alice = @0x12346)]
     fun test_swap_exact_input_doublehop(
         dev: &signer,
         admin: &signer,

@@ -180,6 +180,34 @@ module pancake::router {
         }
     }
 
+    fun get_amount_in_internal<X, Y>(is_x_to_y:bool, y_out_amount: u64): u64 {
+        if (is_x_to_y) {
+            let (rin, rout, _) = swap::token_reserves<X, Y>();
+            swap_utils::get_amount_in(y_out_amount, rin, rout)
+        } else {
+            let (rout, rin, _) = swap::token_reserves<Y, X>();
+            swap_utils::get_amount_in(y_out_amount, rin, rout)
+        }
+    } 
+
+    public fun get_amount_in<X, Y>(y_out_amount: u64): u64 {
+        is_pair_created_internal<X, Y>();
+        let is_x_to_y = swap_utils::sort_token_type<X, Y>();
+        get_amount_in_internal<X, Y>(is_x_to_y, y_out_amount)
+    }
+
+    public fun swap_x_to_exact_y_direct_external<X, Y>(x_in: coin::Coin<X>, y_out_amount:u64): (coin::Coin<X>, coin::Coin<Y>) {
+        is_pair_created_internal<X, Y>();
+        let is_x_to_y = swap_utils::sort_token_type<X, Y>();
+        let x_in_withdraw_amount = get_amount_in_internal<X, Y>(is_x_to_y, y_out_amount);
+        let x_in_amount = coin::value(&x_in);
+        assert!(x_in_amount >= x_in_withdraw_amount, E_INSUFFICIENT_X_AMOUNT);
+        let x_in_left = coin::extract(&mut x_in, x_in_amount - x_in_withdraw_amount);
+        let y_out = get_intermediate_output_x_to_exact_y<X, Y>(is_x_to_y, x_in, y_out_amount);
+        add_swap_event_with_address_internal<X, Y>(@zero, x_in_withdraw_amount, 0, 0, y_out_amount);
+        (x_in_left, y_out)
+    }
+
     fun swap_exact_input_double_internal<X, Y, Z>(
         sender: &signer,
         first_is_x_to_y: bool,
