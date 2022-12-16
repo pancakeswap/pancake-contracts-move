@@ -419,6 +419,146 @@ module pancake::router {
         swap_exact_output_triple_internal<X, Y, Z, A>(sender, first_is_x_to_y, second_is_y_to_z, third_is_z_to_a, x_max_in, a_out);
     }
 
+
+    fun swap_exact_input_quadruple_internal<X, Y, Z, A, B>(
+        sender: &signer,
+        first_is_x_to_y: bool,
+        second_is_y_to_z: bool,
+        third_is_z_to_a: bool,
+        fourth_is_a_to_b: bool,
+        x_in: u64,
+        b_min_out: u64,
+    ): u64 {
+        let coin_x = coin::withdraw<X>(sender, x_in);
+        let coin_y = get_intermediate_output<X, Y>(first_is_x_to_y, coin_x);
+        let coins_y_out = coin::value(&coin_y);
+
+        let coin_z = get_intermediate_output<Y, Z>(second_is_y_to_z, coin_y);
+        let coins_z_out = coin::value(&coin_z);
+
+        let coin_a = get_intermediate_output<Z, A>(third_is_z_to_a, coin_z);
+        let coin_a_out = coin::value(&coin_a);
+
+        let coin_b = get_intermediate_output<A, B>(fourth_is_a_to_b, coin_a);
+        let coin_b_amt = coin::value(&coin_b);
+
+        assert!(coin_b_amt >= b_min_out, E_OUTPUT_LESS_THAN_MIN);
+        let sender_addr = signer::address_of(sender);
+        swap::check_or_register_coin_store<B>(sender);
+        coin::deposit(sender_addr, coin_b);
+
+        add_swap_event_internal<X, Y>(sender, x_in, 0, 0, coins_y_out);
+        add_swap_event_internal<Y, Z>(sender, coins_y_out, 0, 0, coins_z_out);
+        add_swap_event_internal<Z, A>(sender, coins_z_out, 0, 0, coin_a_out);
+        add_swap_event_internal<A, B>(sender, coin_a_out, 0, 0, coin_b_amt);
+        coin_b_amt
+    }
+
+    /// Same as `swap_exact_input` with specify path: X -> Y -> Z -> A -> B
+    public entry fun swap_exact_input_quadruplehop<X, Y, Z, A, B>(
+        sender: &signer,
+        x_in: u64,
+        b_min_out: u64,
+    ) {
+        is_pair_created_internal<X, Y>();
+        is_pair_created_internal<Y, Z>();
+        is_pair_created_internal<Z, A>();
+        is_pair_created_internal<A, B>();
+        let first_is_x_to_y: bool = swap_utils::sort_token_type<X, Y>();
+
+        let second_is_y_to_z: bool = swap_utils::sort_token_type<Y, Z>();
+
+        let third_is_z_to_a: bool = swap_utils::sort_token_type<Z, A>();
+
+        let fourth_is_a_to_b: bool = swap_utils::sort_token_type<A, B>();
+
+        swap_exact_input_quadruple_internal<X, Y, Z, A, B>(sender, first_is_x_to_y, second_is_y_to_z, third_is_z_to_a, fourth_is_a_to_b, x_in, b_min_out);
+    }
+
+    fun swap_exact_output_quadruple_internal<X, Y, Z, A, B>(
+        sender: &signer,
+        first_is_x_to_y: bool,
+        second_is_y_to_z: bool,
+        third_is_z_to_a: bool,
+        fourth_is_a_to_b: bool,
+        x_max_in: u64,
+        b_out: u64,
+    ): u64 {
+        let rin;
+        let rout;
+
+        let a_out = if (fourth_is_a_to_b) {
+            (rin, rout, _) = swap::token_reserves<A, B>();
+            swap_utils::get_amount_in(b_out, rin, rout)
+        }else {
+            (rout, rin, _) = swap::token_reserves<B, A>();
+            swap_utils::get_amount_in(b_out, rin, rout)
+        };
+
+        let z_out = if (third_is_z_to_a) {
+            (rin, rout, _) = swap::token_reserves<Z, A>();
+            swap_utils::get_amount_in(a_out, rin, rout)
+        }else {
+            (rout, rin, _) = swap::token_reserves<A, Z>();
+            swap_utils::get_amount_in(a_out, rin, rout)
+        };
+
+        let y_out = if (second_is_y_to_z) {
+            (rin, rout, _) = swap::token_reserves<Y, Z>();
+            swap_utils::get_amount_in(z_out, rin, rout)
+        }else {
+            (rout, rin, _) = swap::token_reserves<Z, Y>();
+            swap_utils::get_amount_in(z_out, rin, rout)
+        };
+        let x_in = if (first_is_x_to_y) {
+            (rin, rout, _) = swap::token_reserves<X, Y>();
+            swap_utils::get_amount_in(y_out, rin, rout)
+        }else {
+            (rout, rin, _) = swap::token_reserves<Y, X>();
+            swap_utils::get_amount_in(y_out, rin, rout)
+        };
+
+        assert!(x_in <= x_max_in, E_INPUT_MORE_THAN_MAX);
+
+        let coin_x = coin::withdraw<X>(sender, x_in);
+        let coin_y = get_intermediate_output_x_to_exact_y<X, Y>(first_is_x_to_y, coin_x, y_out);
+        let coin_z = get_intermediate_output_x_to_exact_y<Y, Z>(second_is_y_to_z, coin_y, z_out);
+        let coin_a = get_intermediate_output_x_to_exact_y<Z, A>(third_is_z_to_a, coin_z, a_out);
+        let coin_b = get_intermediate_output_x_to_exact_y<A, B>(fourth_is_a_to_b, coin_a, b_out);
+
+        let coin_b_amt = coin::value(&coin_b);
+        let sender_addr = signer::address_of(sender);
+        swap::check_or_register_coin_store<B>(sender);
+        coin::deposit(sender_addr, coin_b);
+
+        add_swap_event_internal<X, Y>(sender, x_in, 0, 0, y_out);
+        add_swap_event_internal<Y, Z>(sender, y_out, 0, 0, z_out);
+        add_swap_event_internal<Z, A>(sender, z_out, 0, 0, a_out);
+        add_swap_event_internal<A, B>(sender, a_out, 0, 0, coin_b_amt);
+        coin_b_amt
+    }
+
+    /// Same as `swap_exact_output` with specify path: X -> Y -> Z -> A -> B
+    public entry fun swap_exact_output_quadruplehop<X, Y, Z, A, B>(
+        sender: &signer,
+        b_out: u64,
+        x_max_in: u64,
+    ) {
+        is_pair_created_internal<X, Y>();
+        is_pair_created_internal<Y, Z>();
+        is_pair_created_internal<Z, A>();
+        is_pair_created_internal<A, B>();
+        let first_is_x_to_y: bool = swap_utils::sort_token_type<X, Y>();
+
+        let second_is_y_to_z: bool = swap_utils::sort_token_type<Y, Z>();
+
+        let third_is_z_to_a: bool = swap_utils::sort_token_type<Z, A>();
+
+        let fourth_is_a_to_b = swap_utils::sort_token_type<A, B>();
+
+        swap_exact_output_quadruple_internal<X, Y, Z, A, B>(sender, first_is_x_to_y, second_is_y_to_z, third_is_z_to_a, fourth_is_a_to_b, x_max_in, b_out);
+    }
+
     public entry fun register_lp<X, Y>(sender: &signer) {
         swap::register_lp<X, Y>(sender);
     }

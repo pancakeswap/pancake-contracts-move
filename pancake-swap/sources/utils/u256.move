@@ -669,6 +669,55 @@ module pancake::u256 {
         GREATER_THAN
     }
 
+    public fun mul_u128(a: u128, b: u128): U256 {
+        let a1 = (a >> 64);
+        let a0 = (a & U64_MAX);
+        let b1 = (b >> 64);
+        let b0 = (b & U64_MAX);
+        // Step 1, v0 v1 created
+        let p = a0 * b0;
+        let v1 = (p >> 64);
+        let v0 = (p & U64_MAX);
+        // Step 2: v2 created, v1 modified
+        let p = a1 * b0;
+        v1 = v1 + (p & U64_MAX) ;
+        let v2 = (p >> 64);
+        if (v1 > U64_MAX) {
+            v2 = v2 + (v1 >> 64);
+            v1 = (v1 & U64_MAX);
+        };
+        // Step 3: v3 created, v2 v1 modified
+        let p = a0 * b1;
+        v1 = v1 + (p & U64_MAX);
+        if (v1 > U64_MAX) {
+            v2 = v2 + (v1 >> 64);
+            v1 = (v1 & U64_MAX);
+        };
+        v2 = v2 + (p >> 64);
+        let v3 = (v2 >> 64);
+        if (v2 > U64_MAX) {
+            v2 = (v2 & U64_MAX);
+        };
+        // Step 4: v3 v2 modified
+        let p = a1 * b1;
+        v2 = v2 + (p & U64_MAX);
+        if (v2 > U64_MAX) {
+            v3 = v3 + (v2 >> 64);
+            v2 = (v2 & U64_MAX);
+        };
+        v3 = v3 + (p >> 64);
+        // Result
+        U256 { v0: (v0 as u64), v1: (v1 as u64), v2: (v2 as u64), v3: (v3 as u64) }
+    }
+
+    /// Greater or equal to
+    public fun ge(a: &U256, b: &U256): bool {
+        if (a.v3 != b.v3) { return a.v3 >= b.v3 };
+        if (a.v2 != b.v2) { return a.v2 >= b.v2 };
+        if (a.v1 != b.v1) { return a.v1 >= b.v1 };
+        (a.v0 >= b.v0)
+    }
+
     // Tests.
     #[test]
     fun test_get_d() {
@@ -1138,4 +1187,47 @@ module pancake::u256 {
     fun test_as_u64_overflow() {
         let _ = as_u64(from_u128(U128_MAX));
     }
+
+    #[test]
+    fun test_mul_u128() {
+        let u64_MAX_as_u256 = from_u128(U64_MAX);
+        let u128_MAX_as_u256 = from_u128(U128_MAX);
+
+        let result_mul = mul(u64_MAX_as_u256,u64_MAX_as_u256);
+        let result_mul_u128 = mul_u128(U64_MAX,U64_MAX);
+        assert!(compare(&result_mul, &result_mul_u128) == 0, 0);
+
+        let result_mul = mul(u128_MAX_as_u256,u128_MAX_as_u256);
+        let result_mul_u128 = mul_u128(U128_MAX,U128_MAX);
+        assert!(compare(&result_mul, &result_mul_u128) == 0, 1);
+
+        let result_mul = mul(u64_MAX_as_u256,u128_MAX_as_u256);
+        let result_mul_u128 = mul_u128(U64_MAX,U128_MAX);
+        assert!(compare(&result_mul, &result_mul_u128) == 0, 2);
+
+        // TODO: Validate the new mul_u128 function with the current mul function.
+    }
+
+    #[test]
+    fun test_ge() {
+        let u64_MAX_as_u256 = from_u128(U64_MAX);
+        let u128_MAX_as_u256 = from_u128(U128_MAX);
+
+        let result_mul = mul(u64_MAX_as_u256,u128_MAX_as_u256);
+        let result_mul_u128 = mul_u128(U64_MAX,U128_MAX);
+        // test equal
+        assert!(ge(&result_mul, &result_mul_u128) == true, 0);
+
+        let one = from_u64(1);
+        result_mul = add(result_mul, one);
+        // test greater
+        assert!(ge(&result_mul, &result_mul_u128) == true, 0);
+
+        let two = from_u64(2);
+        result_mul = sub(result_mul, two);
+        // test smaller
+        assert!(ge(&result_mul, &result_mul_u128) == false, 0);
+
+        // TODO: Validate the new ge function.
+    }    
 }

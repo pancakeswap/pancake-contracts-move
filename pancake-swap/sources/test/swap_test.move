@@ -1,7 +1,7 @@
 #[test_only]
 module pancake::swap_test {
     use std::signer;
-    use test_coin::test_coins::{Self, TestCAKE, TestBUSD, TestUSDC, TestBNB};
+    use test_coin::test_coins::{Self, TestCAKE, TestBUSD, TestUSDC, TestBNB, TestAPT};
     use aptos_framework::account;
     use aptos_framework::coin;
     use aptos_framework::genesis;
@@ -10,6 +10,7 @@ module pancake::swap_test {
     use pancake::router;
     use pancake::math;
     use aptos_std::math64::pow;
+    use pancake::swap_utils;
 
     const MAX_U64: u64 = 18446744073709551615;
     const MINIMUM_LIQUIDITY: u128 = 1000;
@@ -1982,6 +1983,182 @@ module pancake::swap_test {
         assert!((user4_token_xy_y_after_balance - user4_token_xy_y_before_balance) == (user4_remove_liquidity_xy_y as u64), 94);
 
         swap::withdraw_fee<TestCAKE, TestBUSD>(treasury);
+    }
+
+    #[test(dev = @dev, admin = @default_admin, resource_account = @pancake, treasury = @0x23456, bob = @0x12345, alice = @0x12346)]
+    fun test_swap_exact_input_quadruplehop(
+        dev: &signer,
+        admin: &signer,
+        resource_account: &signer,
+        treasury: &signer,
+        bob: &signer,
+        alice: &signer,
+    ) {
+        
+        account::create_account_for_test(signer::address_of(bob));
+        account::create_account_for_test(signer::address_of(alice));
+
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
+
+        let coin_owner = test_coins::init_coins();
+
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestBUSD>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestUSDC>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestBNB>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestAPT>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, alice, 100 * pow(10, 8));
+
+        let initial_reserve_xy_x = 5 * pow(10, 8);
+        let initial_reserve_xy_y = 10 * pow(10, 8);
+        let initial_reserve_yz_y = 5 * pow(10, 8);
+        let initial_reserve_yz_z = 10 * pow(10, 8);
+        let initial_reserve_za_z = 10 * pow(10, 8);
+        let initial_reserve_za_a = 15 * pow(10, 8);
+        let initial_reserve_ab_a = 10 * pow(10, 8);
+        let initial_reserve_ab_b = 15 * pow(10, 8);
+        let input_x = 1 * pow(10, 8);
+
+        router::add_liquidity<TestCAKE, TestBUSD>(bob, initial_reserve_xy_x, initial_reserve_xy_y, 0, 0);
+
+        router::add_liquidity<TestBUSD, TestUSDC>(bob, initial_reserve_yz_y, initial_reserve_yz_z, 0, 0);
+    
+        router::add_liquidity<TestUSDC, TestBNB>(bob, initial_reserve_za_z, initial_reserve_za_a, 0, 0);
+        
+        router::add_liquidity<TestBNB, TestAPT>(bob, initial_reserve_ab_a, initial_reserve_ab_b, 0, 0);
+
+        let alice_token_x_before_balance = coin::balance<TestCAKE>(signer::address_of(alice));
+
+        router::swap_exact_input_quadruplehop<TestCAKE, TestBUSD, TestUSDC, TestBNB, TestAPT>(alice, input_x, 0);
+
+        let alice_token_x_after_balance = coin::balance<TestCAKE>(signer::address_of(alice));
+        let alice_token_b_after_balance = coin::balance<TestAPT>(signer::address_of(alice));
+
+        let output_y = swap_utils::get_amount_out(input_x, initial_reserve_xy_x, initial_reserve_xy_y);
+        let output_z = swap_utils::get_amount_out((output_y as u64), initial_reserve_yz_y, initial_reserve_yz_z);
+        let output_a = swap_utils::get_amount_out((output_z as u64), initial_reserve_za_z, initial_reserve_za_a);
+        let output_b = swap_utils::get_amount_out((output_a as u64), initial_reserve_ab_a, initial_reserve_ab_b);
+
+        let new_reserve_xy_x = initial_reserve_xy_x + input_x;
+        let new_reserve_xy_y = initial_reserve_xy_y - (output_y as u64);
+        let new_reserve_yz_y = initial_reserve_yz_y + (output_y as u64);
+        let new_reserve_yz_z = initial_reserve_yz_z - (output_z as u64);
+        let new_reserve_za_z = initial_reserve_za_z + (output_z as u64);
+        let new_reserve_za_a = initial_reserve_za_a - (output_a as u64);
+        let new_reserve_ab_a = initial_reserve_ab_a + (output_a as u64);
+        let new_reserve_ab_b = initial_reserve_ab_b - (output_b as u64);
+
+        let (reserve_xy_x, reserve_xy_y) = get_token_reserves<TestCAKE, TestBUSD>();
+        let (reserve_yz_y, reserve_yz_z) = get_token_reserves<TestBUSD, TestUSDC>();
+        let (reserve_za_z, reserve_za_a) = get_token_reserves<TestUSDC, TestBNB>();
+        let (reserve_ab_a, reserve_ab_b) = get_token_reserves<TestBNB, TestAPT>();
+
+        assert!((alice_token_x_before_balance - alice_token_x_after_balance) == input_x, 99);
+        assert!(alice_token_b_after_balance == (output_b as u64), 98);
+        assert!(reserve_xy_x == new_reserve_xy_x, 97);
+        assert!(reserve_xy_y == new_reserve_xy_y, 96);
+        assert!(reserve_yz_y == new_reserve_yz_y, 97);
+        assert!(reserve_yz_z == new_reserve_yz_z, 96);
+        assert!(reserve_za_z == new_reserve_za_z, 97);
+        assert!(reserve_za_a == new_reserve_za_a, 96);
+        assert!(reserve_ab_a == new_reserve_ab_a, 97);
+        assert!(reserve_ab_b == new_reserve_ab_b, 96);
+
+    }
+
+    #[test(dev = @dev, admin = @default_admin, resource_account = @pancake, treasury = @0x23456, bob = @0x12345, alice = @0x12346)]
+    fun test_swap_exact_output_quadruplehop(
+        dev: &signer,
+        admin: &signer,
+        resource_account: &signer,
+        treasury: &signer,
+        bob: &signer,
+        alice: &signer,
+    ) {
+
+        account::create_account_for_test(signer::address_of(bob));
+        account::create_account_for_test(signer::address_of(alice));
+
+        setup_test_with_genesis(dev, admin, treasury, resource_account);
+
+        let coin_owner = test_coins::init_coins();
+
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestBUSD>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestUSDC>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestBNB>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestAPT>(&coin_owner, bob, 200 * pow(10, 8));
+        test_coins::register_and_mint<TestCAKE>(&coin_owner, alice, 100 * pow(10, 8));
+
+        let initial_reserve_xy_x = 5 * pow(10, 8);
+        let initial_reserve_xy_y = 10 * pow(10, 8);
+        let initial_reserve_yz_y = 5 * pow(10, 8);
+        let initial_reserve_yz_z = 10 * pow(10, 8);
+        let initial_reserve_za_z = 5 * pow(10, 8);
+        let initial_reserve_za_a = 10 * pow(10, 8);
+        let initial_reserve_ab_a = 10 * pow(10, 8);
+        let initial_reserve_ab_b = 15 * pow(10, 8);
+        let output_b = 8888888;
+
+        router::add_liquidity<TestCAKE, TestBUSD>(bob, initial_reserve_xy_x, initial_reserve_xy_y, 0, 0);
+
+        router::add_liquidity<TestBUSD, TestUSDC>(bob, initial_reserve_yz_y, initial_reserve_yz_z, 0, 0);
+    
+        router::add_liquidity<TestUSDC, TestBNB>(bob, initial_reserve_za_z, initial_reserve_za_a, 0, 0);
+        
+        router::add_liquidity<TestBNB, TestAPT>(bob, initial_reserve_ab_a, initial_reserve_ab_b, 0, 0);
+
+        let alice_token_x_before_balance = coin::balance<TestCAKE>(signer::address_of(alice));
+
+        router::swap_exact_output_quadruplehop<TestCAKE, TestBUSD, TestUSDC, TestBNB, TestAPT>(alice, output_b, 100 * pow(10, 8));
+
+        let alice_token_x_after_balance = coin::balance<TestCAKE>(signer::address_of(alice));
+        let alice_token_b_after_balance = coin::balance<TestAPT>(signer::address_of(alice));
+
+        let output_a = swap_utils::get_amount_in(output_b, initial_reserve_ab_a, initial_reserve_ab_b);
+        let output_z = swap_utils::get_amount_in((output_a as u64), initial_reserve_za_z, initial_reserve_za_a);
+        let output_y = swap_utils::get_amount_in((output_z as u64), initial_reserve_yz_y, initial_reserve_yz_z);
+        let input_x = swap_utils::get_amount_in((output_y as u64), initial_reserve_xy_x, initial_reserve_xy_y);
+
+        let new_reserve_xy_x = initial_reserve_xy_x + (input_x as u64);
+        let new_reserve_xy_y = initial_reserve_xy_y - (output_y as u64);
+        let new_reserve_yz_y = initial_reserve_yz_y + (output_y as u64);
+        let new_reserve_yz_z = initial_reserve_yz_z - (output_z as u64);
+        let new_reserve_za_z = initial_reserve_za_z + (output_z as u64);
+        let new_reserve_za_a = initial_reserve_za_a - (output_a as u64);
+        let new_reserve_ab_a = initial_reserve_ab_a + (output_a as u64);
+        let new_reserve_ab_b = initial_reserve_ab_b - (output_b as u64);
+
+        let (reserve_xy_x, reserve_xy_y) = get_token_reserves<TestCAKE, TestBUSD>();
+        let (reserve_yz_y, reserve_yz_z) = get_token_reserves<TestBUSD, TestUSDC>();
+        let (reserve_za_z, reserve_za_a) = get_token_reserves<TestUSDC, TestBNB>();
+        let (reserve_ab_a, reserve_ab_b) = get_token_reserves<TestBNB, TestAPT>();
+
+        assert!((alice_token_x_before_balance - alice_token_x_after_balance) == (input_x as u64), 99);
+        assert!(alice_token_b_after_balance == output_b, 98);
+        assert!(reserve_xy_x == new_reserve_xy_x, 97);
+        assert!(reserve_xy_y == new_reserve_xy_y, 96);
+        assert!(reserve_yz_y == new_reserve_yz_y, 97);
+        assert!(reserve_yz_z == new_reserve_yz_z, 96);
+        assert!(reserve_za_z == new_reserve_za_z, 97);
+        assert!(reserve_za_a == new_reserve_za_a, 96);
+        assert!(reserve_ab_a == new_reserve_ab_a, 97);
+        assert!(reserve_ab_b == new_reserve_ab_b, 96);
+    }
+
+
+    public fun get_token_reserves<X, Y>(): (u64, u64) {
+
+        let is_x_to_y = swap_utils::sort_token_type<X, Y>();
+        let reserve_x;
+        let reserve_y;
+        if(is_x_to_y){
+            (reserve_x, reserve_y, _) = swap::token_reserves<X, Y>();
+        }else{
+            (reserve_y, reserve_x, _) = swap::token_reserves<Y, X>();
+        };
+        (reserve_x, reserve_y)
+
     }
 
     public fun calc_output_using_input(

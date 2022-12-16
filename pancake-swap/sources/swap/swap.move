@@ -48,6 +48,9 @@ module pancake::swap {
 
     const PRECISION: u64 = 10000;
 
+    /// Max `u128` value.
+    const MAX_U128: u128 = 340282366920938463463374607431768211455;
+
     /// The LP Token type
     struct LPToken<phantom X, phantom Y> has key {}
 
@@ -549,16 +552,21 @@ module pancake::swap {
 
         assert!(amount_x_in > 0 || amount_y_in > 0, ERROR_INSUFFICIENT_INPUT_AMOUNT);
 
-        // (balance_x as u128) * 10000 - (amount_x_in as u128) * 25;
-        let balance_x_adjusted = u256::sub(u256::mul(u256::from_u64(balance_x), u256::from_u64(PRECISION)), u256::mul(u256::from_u64(amount_x_in), u256::from_u64(25)));
-        // (balance_y as u128) * 10000 - (amount_y_in as u128) * 25;
-        let balance_y_adjusted = u256::sub(u256::mul(u256::from_u64(balance_y), u256::from_u64(PRECISION)), u256::mul(u256::from_u64(amount_y_in), u256::from_u64(25)));
-        // (reserves.reserve_x as u128) * (reserves.reserve_y as u128) * 100000000;
-        let k = u256::mul(u256::mul(u256::from_u64(reserves.reserve_x), u256::from_u64(reserves.reserve_y)), u256::mul(u256::from_u64(PRECISION), u256::from_u64(PRECISION)));
-        // balance_x_adjusted * balance_y_adjusted >= k
-        let compare = u256::compare(&u256::mul(balance_x_adjusted, balance_y_adjusted), &k);
-        assert!(compare == u256::get_greater_than() || compare == u256::get_equal(), ERROR_K);
+        let prec = (PRECISION as u128);
+        let balance_x_adjusted = (balance_x as u128) * prec - (amount_x_in as u128) * 25u128;
+        let balance_y_adjusted = (balance_y as u128) * prec - (amount_y_in as u128) * 25u128;
+        let reserve_x_adjusted = (reserves.reserve_x as u128) * prec;
+        let reserve_y_adjusted = (reserves.reserve_y as u128) * prec;
 
+        // No need to use u256 when balance_x_adjusted * balance_y_adjusted and reserve_x_adjusted * reserve_y_adjusted are less than MAX_U128.
+        let compare_result = if(balance_x_adjusted > 0 && reserve_x_adjusted > 0 && MAX_U128 / balance_x_adjusted > balance_y_adjusted && MAX_U128 / reserve_x_adjusted > reserve_y_adjusted){
+            balance_x_adjusted * balance_y_adjusted >= reserve_x_adjusted * reserve_y_adjusted
+        }else{
+            let p = u256::mul_u128(balance_x_adjusted, balance_y_adjusted);
+            let k = u256::mul_u128(reserve_x_adjusted, reserve_y_adjusted);
+            u256::ge(&p, &k)
+        };
+        assert!(compare_result, ERROR_K);
 
         update(balance_x, balance_y, reserves);
 
