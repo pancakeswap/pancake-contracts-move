@@ -127,7 +127,7 @@ For instance, current owners sequence number is 0, we set a new threshold, the
 owners sequence number stays 0, we remove an owner from the multisig wallet, the
 owners sequence number becomes 1.
 Every multisig transaction has its own owners sequence number assigned to the
-global one at the moment it's initicated so that if its owners seq number mismatches the global one when executing, it will abort.
+global one at the moment it's initiated so that if its owners seq number mismatches the global one when executing, it will abort.
 
 ### Mutlisig Transactions
 Store the multisig transactions of `ParamsType` by a `TableWithLength` with
@@ -142,7 +142,7 @@ To execute a multisig transaction, there are 3 steps:
 1. execute
 
 For example, if there are 3 owners: Omelette, JoJo and Snoopy, and the threshold
-is 2. Omelette initicate a multisig transaction, JoJo approve the transaction,
+is 2. Omelette initiate a multisig transaction, JoJo approve the transaction,
 now the number of approval reaches 2 (initiation implies approval), which meets
 the threshold, allowing the transaction to be executed by any owner, i.e.,
 Omelette, JoJo or Snoopy.

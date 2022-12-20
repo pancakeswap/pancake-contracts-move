@@ -11,17 +11,11 @@ module pancake_multisig_wallet::multisig_wallet {
     use aptos_framework::coin;
     use aptos_framework::timestamp;
 
-    #[test_only]
-    use aptos_framework::genesis;
-    #[test_only]
-    use aptos_framework::managed_coin;
-
     const ERROR_NOT_RESOURCE_ACCOUNT: u64 = 0;
     const ERROR_NOT_OWNER: u64 = 1;
     const ERROR_LESS_THAN_THRESHOLD: u64 = 2;
     const ERROR_ALREADY_EXECUTED: u64 = 3;
     const ERROR_ALREADY_APPROVED: u64 = 4;
-    const ERROR_MULTISIG_TXS_NOT_EXIST: u64 = 5;
     const ERROR_OWNERS_SEQ_NUMBER_NOT_MATCH: u64 = 6;
     const ERROR_MORE_THAN_NUM_OWNERS: u64 = 7;
     const ERROR_LESS_THAN_MIN_THRESHOLD: u64 = 8;
@@ -33,14 +27,7 @@ module pancake_multisig_wallet::multisig_wallet {
     const ERROR_INVALID_EXPIRATION: u64 = 14;
 
     const MAX_U64: u64 = 18446744073709551615;
-    const MIN_THRESHOLD: u8 = 1;
-
-    #[test_only]
-    const MINUTE_IN_SECONDS: u64 = 60;
-    #[test_only]
-    const HOUR_IN_SECONDS: u64 = 60 * 60;
-    #[test_only]
-    const DAY_IN_SECONDS: u64 = 24 * 60 * 60;
+    const MIN_THRESHOLD: u8 = 2;
 
     struct MultisigWallet has key {
         // If an address is present in the table, whether its corresponding value is true or false, it has the owner privilege. That is, we are using table as set here.
@@ -50,11 +37,10 @@ module pancake_multisig_wallet::multisig_wallet {
         owners_keys: vector<address>,
         threshold: u8,
         seq_number_to_params_type_name: Table::TableWithLength<u64, string::String>,
-        // To enforce multisig transactions execute in order
+        // Enforce multisig transactions to be executed in order
         last_executed_seq_number: u64,
-        // Sequence number for owners, incremented only when there is a change on the owners (more
-        // specifically, only after removing an owner) so that all the multisig transactions can be
-        // invalidated after the change
+        // Sequence number for owners, incremented only when there is a change on the owners so
+        // that all the multisig transactions can be invalidated after the change
         owners_seq_number: u64,
     }
 
@@ -114,18 +100,9 @@ module pancake_multisig_wallet::multisig_wallet {
         seq_number: u64,
     }
 
-    #[test_only]
-    struct TestCAKE {
-    }
-
     fun init_module(sender: &signer) {
         // Make this module impossible to upgrade
         let _signer_cap = resource_account::retrieve_resource_account_cap(sender, @pancake_multisig_wallet_dev);
-    }
-
-    #[test_only]
-    public fun init_module_for_test(sender: &signer) {
-        init_module(sender);
     }
 
     public fun initialize(sender: &signer, owner_addresses: vector<address>, threshold: u8) {
@@ -160,16 +137,6 @@ module pancake_multisig_wallet::multisig_wallet {
             init_multisig_tx_events: account::new_event_handle<InitMultisigTxEvent>(sender),
             approve_multisig_tx_events: account::new_event_handle<ApproveMultisigTxEvent>(sender),
             execute_multisig_tx_events: account::new_event_handle<ExecuteMultisigTxEvent>(sender),
-        });
-    }
-
-    public fun is_multisig_txs_registered<ParamsType: copy + store>(addr: address): bool {
-        exists<MultisigTxs<ParamsType>>(addr)
-    }
-
-    public fun register_multisig_txs<ParamsType: copy + store>(sender: &signer) {
-        move_to(sender, MultisigTxs<ParamsType> {
-            txs: Table::new<u64, MultisigTx<ParamsType>>(),
         });
     }
 
@@ -244,58 +211,53 @@ module pancake_multisig_wallet::multisig_wallet {
         tx.owners_seq_number
     }
 
-    public fun init_add_owner(sender: &signer, multisig_wallet_addr: address, eta: u64, expiration: u64, owner: address) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+    public fun register_multisig_txs<ParamsType: copy + store>(sender: &signer) {
+        move_to(sender, MultisigTxs<ParamsType> {
+            txs: Table::new<u64, MultisigTx<ParamsType>>(),
+        });
+    }
+
+    public fun init_add_owner(sender: &signer, multisig_wallet_signer: &signer, eta: u64, expiration: u64, owner: address) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_wallet = borrow_global<MultisigWallet>(multisig_wallet_addr);
         assert!(!Table::contains(&multisig_wallet.owners, owner), ERROR_OWNER_ALREADY_EXIST);
-        init_multisig_tx<AddOwnerParams>(sender, multisig_wallet_addr, eta, expiration, AddOwnerParams {
+        init_multisig_tx<AddOwnerParams>(sender, multisig_wallet_signer, eta, expiration, AddOwnerParams {
             owner,
         });
     }
 
-    public fun init_remove_owner(sender: &signer, multisig_wallet_addr: address, eta: u64, expiration: u64, owner: address) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+    public fun init_remove_owner(sender: &signer, multisig_wallet_signer: &signer, eta: u64, expiration: u64, owner: address) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_wallet = borrow_global<MultisigWallet>(multisig_wallet_addr);
         assert!(Table::contains(&multisig_wallet.owners, owner), ERROR_OWNER_NOT_EXIST);
         assert!(Table::length(&multisig_wallet.owners) - 1 >= (multisig_wallet.threshold as u64), ERROR_LESS_THAN_THRESHOLD);
-        init_multisig_tx<RemoveOwnerParams>(sender, multisig_wallet_addr, eta, expiration, RemoveOwnerParams {
+        init_multisig_tx<RemoveOwnerParams>(sender, multisig_wallet_signer, eta, expiration, RemoveOwnerParams {
             owner,
         });
     }
 
-    public fun init_set_threshold(sender: &signer, multisig_wallet_addr: address, eta: u64, expiration: u64, threshold: u8) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+    public fun init_set_threshold(sender: &signer, multisig_wallet_signer: &signer, eta: u64, expiration: u64, threshold: u8) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_wallet = borrow_global<MultisigWallet>(multisig_wallet_addr);
         assert!((threshold as u64) <= Table::length(&multisig_wallet.owners), ERROR_MORE_THAN_NUM_OWNERS);
         assert!(threshold >= MIN_THRESHOLD, ERROR_LESS_THAN_MIN_THRESHOLD);
-        init_multisig_tx<SetThresholdParams>(sender, multisig_wallet_addr, eta, expiration, SetThresholdParams {
+        init_multisig_tx<SetThresholdParams>(sender, multisig_wallet_signer, eta, expiration, SetThresholdParams {
             threshold,
         });
     }
 
-    public fun is_withdraw_multisig_txs_registered<CoinType>(addr: address): bool {
-        exists<MultisigTxs<WithdrawParams<CoinType>>>(addr)
-    }
-
-    public fun register_withdraw_multisig_txs<CoinType>(sender: &signer) {
-        move_to(sender, MultisigTxs<WithdrawParams<CoinType>> {
-            txs: Table::new<u64, MultisigTx<WithdrawParams<CoinType>>>(),
-        });
-    }
-
-    public fun init_withdraw<CoinType>(sender: &signer, multisig_wallet_addr: address, eta: u64, expiration: u64, amount: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
-        assert!(exists<MultisigTxs<WithdrawParams<CoinType>>>(multisig_wallet_addr), ERROR_MULTISIG_TXS_NOT_EXIST);
-        let sender_addr = signer::address_of(sender);
-        init_multisig_tx<WithdrawParams<CoinType>>(sender, multisig_wallet_addr, eta, expiration, WithdrawParams<CoinType> {
+    public fun init_withdraw<CoinType>(sender: &signer, multisig_wallet_signer: &signer, eta: u64, expiration: u64, to: address, amount: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        init_multisig_tx<WithdrawParams<CoinType>>(sender, multisig_wallet_signer, eta, expiration, WithdrawParams<CoinType> {
             amount,
-            to: sender_addr,
+            to,
         });
-        if (!coin::is_account_registered<CoinType>(sender_addr)) {
-            coin::register<CoinType>(sender);
-        };
     }
 
-    public fun init_multisig_tx<ParamsType: copy + store>(sender: &signer, multisig_wallet_addr: address, eta: u64, expiration: u64, params: ParamsType) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+    public fun init_multisig_tx<ParamsType: copy + store>(sender: &signer, multisig_wallet_signer: &signer, eta: u64, expiration: u64, params: ParamsType) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
         assert!(eta < expiration , ERROR_INVALID_EXPIRATION);
 
         let sender_addr = signer::address_of(sender);
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_wallet = borrow_global_mut<MultisigWallet>(multisig_wallet_addr);
         assert!(Table::contains(&multisig_wallet.owners, sender_addr) , ERROR_NOT_OWNER);
 
@@ -325,24 +287,25 @@ module pancake_multisig_wallet::multisig_wallet {
         );
     }
 
-    public fun approve_add_owner(sender: &signer, multisig_wallet_addr: address, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
-        approve_multisig_tx<AddOwnerParams>(sender, multisig_wallet_addr, seq_number);
+    public fun approve_add_owner(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        approve_multisig_tx<AddOwnerParams>(sender, multisig_wallet_signer, seq_number);
     }
 
-    public fun approve_remove_owner(sender: &signer, multisig_wallet_addr: address, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
-        approve_multisig_tx<RemoveOwnerParams>(sender, multisig_wallet_addr, seq_number);
+    public fun approve_remove_owner(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        approve_multisig_tx<RemoveOwnerParams>(sender, multisig_wallet_signer, seq_number);
     }
 
-    public fun approve_set_threshold(sender: &signer, multisig_wallet_addr: address, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
-        approve_multisig_tx<SetThresholdParams>(sender, multisig_wallet_addr, seq_number);
+    public fun approve_set_threshold(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        approve_multisig_tx<SetThresholdParams>(sender, multisig_wallet_signer, seq_number);
     }
 
-    public fun approve_withdraw<CoinType>(sender: &signer, multisig_wallet_addr: address, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
-        approve_multisig_tx<WithdrawParams<CoinType>>(sender, multisig_wallet_addr, seq_number);
+    public fun approve_withdraw<CoinType>(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        approve_multisig_tx<WithdrawParams<CoinType>>(sender, multisig_wallet_signer, seq_number);
     }
 
-    public fun approve_multisig_tx<ParamsType: copy + store>(sender: &signer, multisig_wallet_addr: address, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+    public fun approve_multisig_tx<ParamsType: copy + store>(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
         let sender_addr = signer::address_of(sender);
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_wallet = borrow_global<MultisigWallet>(multisig_wallet_addr);
         assert!(Table::contains(&multisig_wallet.owners, sender_addr) , ERROR_NOT_OWNER);
 
@@ -363,9 +326,10 @@ module pancake_multisig_wallet::multisig_wallet {
         );
     }
 
-    public fun execute_add_owner(sender: &signer, multisig_wallet_addr: address, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
-        execute_multisig_tx<AddOwnerParams>(sender, multisig_wallet_addr, seq_number);
+    public fun execute_add_owner(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        execute_multisig_tx<AddOwnerParams>(sender, multisig_wallet_signer, seq_number);
 
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_txs = borrow_global<MultisigTxs<AddOwnerParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
         let multisig_wallet = borrow_global_mut<MultisigWallet>(multisig_wallet_addr);
@@ -373,9 +337,10 @@ module pancake_multisig_wallet::multisig_wallet {
         vector::push_back(&mut multisig_wallet.owners_keys, tx.params.owner);
     }
 
-    public fun execute_remove_owner(sender: &signer, multisig_wallet_addr: address, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
-        execute_multisig_tx<RemoveOwnerParams>(sender, multisig_wallet_addr, seq_number);
+    public fun execute_remove_owner(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        execute_multisig_tx<RemoveOwnerParams>(sender, multisig_wallet_signer, seq_number);
 
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_txs = borrow_global<MultisigTxs<RemoveOwnerParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
         let multisig_wallet = borrow_global_mut<MultisigWallet>(multisig_wallet_addr);
@@ -385,9 +350,10 @@ module pancake_multisig_wallet::multisig_wallet {
         vector::swap_remove(&mut multisig_wallet.owners_keys, idx_to_remove);
     }
 
-    public fun execute_set_threshold(sender: &signer, multisig_wallet_addr: address, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
-        execute_multisig_tx<SetThresholdParams>(sender, multisig_wallet_addr, seq_number);
+    public fun execute_set_threshold(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        execute_multisig_tx<SetThresholdParams>(sender, multisig_wallet_signer, seq_number);
 
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_txs = borrow_global<MultisigTxs<SetThresholdParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
         let multisig_wallet = borrow_global_mut<MultisigWallet>(multisig_wallet_addr);
@@ -395,16 +361,17 @@ module pancake_multisig_wallet::multisig_wallet {
     }
 
     public fun execute_withdraw<CoinType>(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
-        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
-        execute_multisig_tx<WithdrawParams<CoinType>>(sender, multisig_wallet_addr, seq_number);
+        execute_multisig_tx<WithdrawParams<CoinType>>(sender, multisig_wallet_signer, seq_number);
 
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_txs = borrow_global<MultisigTxs<WithdrawParams<CoinType>>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
         coin::transfer<CoinType>(multisig_wallet_signer, tx.params.to, tx.params.amount);
     }
 
-    public fun execute_multisig_tx<ParamsType: copy + store>(sender: &signer, multisig_wallet_addr: address, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+    public fun execute_multisig_tx<ParamsType: copy + store>(sender: &signer, multisig_wallet_signer: &signer, seq_number: u64) acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
         let sender_addr = signer::address_of(sender);
+        let multisig_wallet_addr = signer::address_of(multisig_wallet_signer);
         let multisig_wallet = borrow_global_mut<MultisigWallet>(multisig_wallet_addr);
         assert!(Table::contains(&multisig_wallet.owners, sender_addr), ERROR_NOT_OWNER);
         assert!(multisig_wallet.last_executed_seq_number == MAX_U64 || seq_number > multisig_wallet.last_executed_seq_number, ERROR_MULTISIG_TX_INVALIDATED);
@@ -419,7 +386,11 @@ module pancake_multisig_wallet::multisig_wallet {
         assert!(timestamp::now_seconds() >= tx.eta, ERROR_TIMELOCK_NOT_SURPASSED);
         assert!(timestamp::now_seconds() < tx.expiration, ERROR_MULTISIG_TX_EXPIRED);
 
-        if (type_info::type_name<ParamsType>() == type_info::type_name<RemoveOwnerParams>()) {
+        if (
+            type_info::type_name<ParamsType>() == type_info::type_name<RemoveOwnerParams>()
+            || type_info::type_name<ParamsType>() == type_info::type_name<AddOwnerParams>()
+            || type_info::type_name<ParamsType>() == type_info::type_name<SetThresholdParams>()
+        ) {
             multisig_wallet.owners_seq_number = multisig_wallet.owners_seq_number + 1;
         };
 
@@ -431,6 +402,27 @@ module pancake_multisig_wallet::multisig_wallet {
                 seq_number,
             }
         );
+    }
+
+    #[test_only]
+    use aptos_framework::genesis;
+    #[test_only]
+    use aptos_framework::managed_coin;
+
+    #[test_only]
+    const MINUTE_IN_SECONDS: u64 = 60;
+    #[test_only]
+    const HOUR_IN_SECONDS: u64 = 60 * 60;
+    #[test_only]
+    const DAY_IN_SECONDS: u64 = 24 * 60 * 60;
+
+    #[test_only]
+    struct TestCAKE {
+    }
+
+    #[test_only]
+    public fun init_module_for_test(sender: &signer) {
+        init_module(sender);
     }
 
     #[test(
@@ -454,12 +446,11 @@ module pancake_multisig_wallet::multisig_wallet {
             &multisig_wallet
         );
 
-        let multisig_wallet_addr = signer::address_of(&multisig_wallet);
         let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
         let expiration = eta + DAY_IN_SECONDS;
         let new_owner_addr = @0x12345;
 
-        init_add_owner(&sender, multisig_wallet_addr, eta, expiration, new_owner_addr);
+        init_add_owner(&sender, &multisig_wallet, eta, expiration, new_owner_addr);
     }
 
     #[test(
@@ -483,12 +474,11 @@ module pancake_multisig_wallet::multisig_wallet {
             &multisig_wallet
         );
 
-        let multisig_wallet_addr = signer::address_of(&multisig_wallet);
         let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
         let expiration = eta + DAY_IN_SECONDS;
         let new_owner_addr = @multisig_wallet_owner1;
 
-        init_add_owner(&sender, multisig_wallet_addr, eta, expiration, new_owner_addr);
+        init_add_owner(&sender, &multisig_wallet, eta, expiration, new_owner_addr);
     }
 
     #[test(
@@ -518,7 +508,7 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&sender, multisig_wallet_addr, eta, expiration, new_owner_addr);
+        init_add_owner(&sender, &multisig_wallet, eta, expiration, new_owner_addr);
 
         let multisig_txs = borrow_global<MultisigTxs<AddOwnerParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
@@ -549,12 +539,11 @@ module pancake_multisig_wallet::multisig_wallet {
             &multisig_wallet
         );
 
-        let multisig_wallet_addr = signer::address_of(&multisig_wallet);
         let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
         let expiration = eta + DAY_IN_SECONDS;
         let owner_addr_to_remove = @multisig_wallet_owner1;
 
-        init_remove_owner(&sender, multisig_wallet_addr, eta, expiration, owner_addr_to_remove);
+        init_remove_owner(&sender, &multisig_wallet, eta, expiration, owner_addr_to_remove);
     }
 
     #[test(
@@ -578,12 +567,11 @@ module pancake_multisig_wallet::multisig_wallet {
             &multisig_wallet
         );
 
-        let multisig_wallet_addr = signer::address_of(&multisig_wallet);
         let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
         let expiration = eta + DAY_IN_SECONDS;
         let owner_addr_to_remove = @0x12345;
 
-        init_remove_owner(&sender, multisig_wallet_addr, eta, expiration, owner_addr_to_remove);
+        init_remove_owner(&sender, &multisig_wallet, eta, expiration, owner_addr_to_remove);
     }
 
     #[test(
@@ -619,11 +607,11 @@ module pancake_multisig_wallet::multisig_wallet {
         let owner_addr_to_remove = @multisig_wallet_owner1;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_remove_owner(&initiator, multisig_wallet_addr, eta, expiration, owner_addr_to_remove);
-        approve_remove_owner(&approver, multisig_wallet_addr, seq_number);
+        init_remove_owner(&initiator, &multisig_wallet, eta, expiration, owner_addr_to_remove);
+        approve_remove_owner(&approver, &multisig_wallet, seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
-        execute_remove_owner(&executor, multisig_wallet_addr, seq_number);
-        init_remove_owner(&sender, multisig_wallet_addr, eta, expiration, @multisig_wallet_owner2);
+        execute_remove_owner(&executor, &multisig_wallet, seq_number);
+        init_remove_owner(&sender, &multisig_wallet, eta, expiration, @multisig_wallet_owner2);
     }
 
     #[test(
@@ -653,7 +641,7 @@ module pancake_multisig_wallet::multisig_wallet {
         let owner_addr_to_remove = @multisig_wallet_owner1;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_remove_owner(&sender, multisig_wallet_addr, eta, expiration, owner_addr_to_remove);
+        init_remove_owner(&sender, &multisig_wallet, eta, expiration, owner_addr_to_remove);
 
         let multisig_txs = borrow_global<MultisigTxs<RemoveOwnerParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
@@ -684,12 +672,11 @@ module pancake_multisig_wallet::multisig_wallet {
             &multisig_wallet
         );
 
-        let multisig_wallet_addr = signer::address_of(&multisig_wallet);
         let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
         let expiration = eta + DAY_IN_SECONDS;
         let new_threshold = 3;
 
-        init_set_threshold(&sender, multisig_wallet_addr, eta, expiration, new_threshold);
+        init_set_threshold(&sender, &multisig_wallet, eta, expiration, new_threshold);
     }
 
     #[test(
@@ -713,12 +700,11 @@ module pancake_multisig_wallet::multisig_wallet {
             &multisig_wallet
         );
 
-        let multisig_wallet_addr = signer::address_of(&multisig_wallet);
         let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
         let expiration = eta + DAY_IN_SECONDS;
         let new_threshold = 4;
 
-        init_set_threshold(&sender, multisig_wallet_addr, eta, expiration, new_threshold);
+        init_set_threshold(&sender, &multisig_wallet, eta, expiration, new_threshold);
     }
 
     #[test(
@@ -742,12 +728,11 @@ module pancake_multisig_wallet::multisig_wallet {
             &multisig_wallet
         );
 
-        let multisig_wallet_addr = signer::address_of(&multisig_wallet);
         let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
         let expiration = eta + DAY_IN_SECONDS;
         let new_threshold = 0;
 
-        init_set_threshold(&sender, multisig_wallet_addr, eta, expiration, new_threshold);
+        init_set_threshold(&sender, &multisig_wallet, eta, expiration, new_threshold);
     }
 
     #[test(
@@ -777,7 +762,7 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_threshold = 3;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_set_threshold(&sender, multisig_wallet_addr, eta, expiration, new_threshold);
+        init_set_threshold(&sender, &multisig_wallet, eta, expiration, new_threshold);
 
         let multisig_txs = borrow_global<MultisigTxs<SetThresholdParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
@@ -808,13 +793,13 @@ module pancake_multisig_wallet::multisig_wallet {
             &multisig_wallet
         );
 
-        let multisig_wallet_addr = signer::address_of(&multisig_wallet);
+        let sender_addr = signer::address_of(&sender);
         let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
         let expiration = eta + DAY_IN_SECONDS;
         let amount = 100 * 100000000;
 
-        register_withdraw_multisig_txs<TestCAKE>(&multisig_wallet);
-        init_withdraw<TestCAKE>(&sender, multisig_wallet_addr, eta, expiration, amount);
+        register_multisig_txs<WithdrawParams<TestCAKE>>(&multisig_wallet);
+        init_withdraw<TestCAKE>(&sender, &multisig_wallet, eta, expiration, sender_addr, amount);
     }
 
     #[test(
@@ -844,8 +829,8 @@ module pancake_multisig_wallet::multisig_wallet {
         let amount = 100 * 100000000;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        register_withdraw_multisig_txs<TestCAKE>(&multisig_wallet);
-        init_withdraw<TestCAKE>(&sender, multisig_wallet_addr, eta, expiration, amount);
+        register_multisig_txs<WithdrawParams<TestCAKE>>(&multisig_wallet);
+        init_withdraw<TestCAKE>(&sender, &multisig_wallet, eta, expiration, sender_addr, amount);
 
         let multisig_txs = borrow_global<MultisigTxs<WithdrawParams<TestCAKE>>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
@@ -885,8 +870,8 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
-        approve_add_owner(&sender, multisig_wallet_addr, seq_number);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
+        approve_add_owner(&sender, &multisig_wallet, seq_number);
     }
 
     #[test(
@@ -922,11 +907,11 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
-        approve_add_owner(&approver, multisig_wallet_addr, seq_number);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
+        approve_add_owner(&approver, &multisig_wallet, seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
-        execute_add_owner(&executor, multisig_wallet_addr, seq_number);
-        approve_add_owner(&sender, multisig_wallet_addr, seq_number);
+        execute_add_owner(&executor, &multisig_wallet, seq_number);
+        approve_add_owner(&sender, &multisig_wallet, seq_number);
     }
 
     #[test(
@@ -958,9 +943,9 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
-        approve_add_owner(&sender, multisig_wallet_addr, seq_number);
-        approve_add_owner(&sender, multisig_wallet_addr, seq_number);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
+        approve_add_owner(&sender, &multisig_wallet, seq_number);
+        approve_add_owner(&sender, &multisig_wallet, seq_number);
     }
 
     #[test(
@@ -992,9 +977,9 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
         let num_approvals = num_multisig_tx_approvals<AddOwnerParams>(multisig_wallet_addr, seq_number);
-        approve_add_owner(&sender, multisig_wallet_addr, seq_number);
+        approve_add_owner(&sender, &multisig_wallet, seq_number);
 
         let multisig_txs = borrow_global<MultisigTxs<AddOwnerParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
@@ -1036,10 +1021,10 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
-        approve_add_owner(&approver, multisig_wallet_addr, seq_number);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
+        approve_add_owner(&approver, &multisig_wallet, seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
-        execute_add_owner(&sender, multisig_wallet_addr, seq_number);
+        execute_add_owner(&sender, &multisig_wallet, seq_number);
     }
 
     #[test(
@@ -1073,12 +1058,13 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
-        approve_add_owner(&approver, multisig_wallet_addr, seq_number);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
+        approve_add_owner(&approver, &multisig_wallet, seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
-        execute_add_owner(&sender, multisig_wallet_addr, seq_number);
-        execute_add_owner(&sender, multisig_wallet_addr, seq_number);
+        execute_add_owner(&sender, &multisig_wallet, seq_number);
+        execute_add_owner(&sender, &multisig_wallet, seq_number);
     }
+
     #[test(
         sender = @multisig_wallet_owner3,
         initiator = @multisig_wallet_owner1,
@@ -1108,9 +1094,9 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
-        execute_add_owner(&sender, multisig_wallet_addr, seq_number);
+        execute_add_owner(&sender, &multisig_wallet, seq_number);
     }
 
     #[test(
@@ -1144,9 +1130,9 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
-        approve_add_owner(&approver, multisig_wallet_addr, seq_number);
-        execute_add_owner(&sender, multisig_wallet_addr, seq_number);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
+        approve_add_owner(&approver, &multisig_wallet, seq_number);
+        execute_add_owner(&sender, &multisig_wallet, seq_number);
     }
 
     #[test(
@@ -1180,10 +1166,10 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
-        approve_add_owner(&approver, multisig_wallet_addr, seq_number);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
+        approve_add_owner(&approver, &multisig_wallet, seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS + DAY_IN_SECONDS);
-        execute_add_owner(&sender, multisig_wallet_addr, seq_number);
+        execute_add_owner(&sender, &multisig_wallet, seq_number);
     }
 
     #[test(
@@ -1216,11 +1202,11 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_owner_addr = @0x12345;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_add_owner(&initiator, multisig_wallet_addr, eta, expiration, new_owner_addr);
-        approve_add_owner(&approver, multisig_wallet_addr, seq_number);
+        init_add_owner(&initiator, &multisig_wallet, eta, expiration, new_owner_addr);
+        approve_add_owner(&approver, &multisig_wallet, seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
         let num_owners = num_owners(multisig_wallet_addr);
-        execute_add_owner(&sender, multisig_wallet_addr, seq_number);
+        execute_add_owner(&sender, &multisig_wallet, seq_number);
 
         let multisig_txs = borrow_global<MultisigTxs<AddOwnerParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
@@ -1263,11 +1249,11 @@ module pancake_multisig_wallet::multisig_wallet {
         let owner_addr_to_remove = @multisig_wallet_owner1;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_remove_owner(&initiator, multisig_wallet_addr, eta, expiration, owner_addr_to_remove);
-        approve_remove_owner(&approver, multisig_wallet_addr, seq_number);
+        init_remove_owner(&initiator, &multisig_wallet, eta, expiration, owner_addr_to_remove);
+        approve_remove_owner(&approver, &multisig_wallet, seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
         let num_owners = num_owners(multisig_wallet_addr);
-        execute_remove_owner(&sender, multisig_wallet_addr, seq_number);
+        execute_remove_owner(&sender, &multisig_wallet, seq_number);
 
         let multisig_txs = borrow_global<MultisigTxs<RemoveOwnerParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
@@ -1310,10 +1296,10 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_threshold = 3;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        init_set_threshold(&initiator, multisig_wallet_addr, eta, expiration, new_threshold);
-        approve_set_threshold(&approver, multisig_wallet_addr, seq_number);
+        init_set_threshold(&initiator, &multisig_wallet, eta, expiration, new_threshold);
+        approve_set_threshold(&approver, &multisig_wallet, seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
-        execute_set_threshold(&sender, multisig_wallet_addr, seq_number);
+        execute_set_threshold(&sender, &multisig_wallet, seq_number);
 
         let multisig_txs = borrow_global<MultisigTxs<SetThresholdParams>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
@@ -1357,26 +1343,28 @@ module pancake_multisig_wallet::multisig_wallet {
             8,
             true,
         );
-        managed_coin::register<TestCAKE>(&multisig_wallet);
+        coin::register<TestCAKE>(&multisig_wallet);
         managed_coin::mint<TestCAKE>(&pancake_multisig_wallet, signer::address_of(&multisig_wallet), 1000 * 100000000);
 
+        let sender_addr = signer::address_of(&sender);
         let multisig_wallet_addr = signer::address_of(&multisig_wallet);
         let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
         let expiration = eta + DAY_IN_SECONDS;
         let amount = 100 * 100000000;
 
         let seq_number = next_seq_number(multisig_wallet_addr);
-        register_withdraw_multisig_txs<TestCAKE>(&multisig_wallet);
-        init_withdraw<TestCAKE>(&initiator, multisig_wallet_addr, eta, expiration, amount);
-        approve_withdraw<TestCAKE>(&approver, multisig_wallet_addr, seq_number);
+        register_multisig_txs<WithdrawParams<TestCAKE>>(&multisig_wallet);
+        init_withdraw<TestCAKE>(&initiator, &multisig_wallet, eta, expiration, sender_addr, amount);
+        approve_withdraw<TestCAKE>(&approver, &multisig_wallet, seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
+        coin::register<TestCAKE>(&sender);
         execute_withdraw<TestCAKE>(&sender, &multisig_wallet, seq_number);
 
         let multisig_txs = borrow_global<MultisigTxs<WithdrawParams<TestCAKE>>>(multisig_wallet_addr);
         let tx = Table::borrow(&multisig_txs.txs, seq_number);
         assert!(tx.is_executed, 0);
 
-        assert!(coin::balance<TestCAKE>(signer::address_of(&initiator)) == amount, 0);
+        assert!(coin::balance<TestCAKE>(sender_addr) == amount, 0);
     }
 
     #[test(
@@ -1411,14 +1399,57 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_threshold = 3;
 
         let remove_owner_seq_number = next_seq_number(multisig_wallet_addr);
-        init_remove_owner(&initiator, multisig_wallet_addr, eta, expiration, owner_addr_to_remove);
-        approve_remove_owner(&approver, multisig_wallet_addr, remove_owner_seq_number);
+        init_remove_owner(&initiator, &multisig_wallet, eta, expiration, owner_addr_to_remove);
+        approve_remove_owner(&approver, &multisig_wallet, remove_owner_seq_number);
         let set_threshold_seq_number = next_seq_number(multisig_wallet_addr);
-        init_set_threshold(&initiator, multisig_wallet_addr, eta, expiration, new_threshold);
-        approve_set_threshold(&approver, multisig_wallet_addr, set_threshold_seq_number);
+        init_set_threshold(&initiator, &multisig_wallet, eta, expiration, new_threshold);
+        approve_set_threshold(&approver, &multisig_wallet, set_threshold_seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
-        execute_set_threshold(&sender, multisig_wallet_addr, set_threshold_seq_number);
-        execute_remove_owner(&sender, multisig_wallet_addr, remove_owner_seq_number);
+        execute_set_threshold(&sender, &multisig_wallet, set_threshold_seq_number);
+        execute_remove_owner(&sender, &multisig_wallet, remove_owner_seq_number);
+    }
+
+    #[test(
+        sender = @multisig_wallet_owner3,
+        approver = @multisig_wallet_owner2,
+        initiator = @multisig_wallet_owner1,
+        pancake_multisig_wallet_dev = @pancake_multisig_wallet_dev,
+        pancake_multisig_wallet = @pancake_multisig_wallet,
+        multisig_wallet = @multisig_wallet
+    )]
+    #[expected_failure(abort_code = 6)]
+    fun execute_multisig_tx_owners_seq_number_not_match_2(
+        sender: signer,
+        approver: signer,
+        initiator: signer,
+        pancake_multisig_wallet_dev: signer,
+        pancake_multisig_wallet: signer,
+        multisig_wallet: signer
+    )
+    acquires MultisigWallet, MultisigTxs, MultisigWalletEvents {
+        before_each_test(
+            &sender,
+            &pancake_multisig_wallet_dev,
+            &pancake_multisig_wallet,
+            &multisig_wallet
+        );
+
+        let multisig_wallet_addr = signer::address_of(&multisig_wallet);
+        let eta = timestamp::now_seconds() + HOUR_IN_SECONDS;
+        let expiration = eta + DAY_IN_SECONDS;
+        let owner_addr_to_remove = @multisig_wallet_owner1;
+        let new_threshold = 3;
+
+        let set_threshold_seq_number = next_seq_number(multisig_wallet_addr);
+        init_set_threshold(&initiator, &multisig_wallet, eta, expiration, new_threshold);
+        approve_set_threshold(&approver, &multisig_wallet, set_threshold_seq_number);
+        let remove_owner_seq_number = next_seq_number(multisig_wallet_addr);
+        init_remove_owner(&initiator, &multisig_wallet, eta, expiration, owner_addr_to_remove);
+        approve_remove_owner(&approver, &multisig_wallet, remove_owner_seq_number);
+        approve_remove_owner(&sender, &multisig_wallet, remove_owner_seq_number);
+        timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
+        execute_set_threshold(&sender, &multisig_wallet, set_threshold_seq_number);
+        execute_remove_owner(&sender, &multisig_wallet, remove_owner_seq_number);
     }
 
     #[test(
@@ -1453,14 +1484,14 @@ module pancake_multisig_wallet::multisig_wallet {
         let new_threshold = 3;
 
         let remove_owner_seq_number = next_seq_number(multisig_wallet_addr);
-        init_remove_owner(&initiator, multisig_wallet_addr, eta, expiration, owner_addr_to_remove);
-        approve_remove_owner(&approver, multisig_wallet_addr, remove_owner_seq_number);
+        init_remove_owner(&initiator, &multisig_wallet, eta, expiration, owner_addr_to_remove);
+        approve_remove_owner(&approver, &multisig_wallet, remove_owner_seq_number);
         let set_threshold_seq_number = next_seq_number(multisig_wallet_addr);
-        init_set_threshold(&initiator, multisig_wallet_addr, eta, expiration, new_threshold);
-        approve_set_threshold(&approver, multisig_wallet_addr, set_threshold_seq_number);
+        init_set_threshold(&initiator, &multisig_wallet, eta, expiration, new_threshold);
+        approve_set_threshold(&approver, &multisig_wallet, set_threshold_seq_number);
         timestamp::fast_forward_seconds(HOUR_IN_SECONDS);
-        execute_remove_owner(&sender, multisig_wallet_addr, remove_owner_seq_number);
-        execute_set_threshold(&sender, multisig_wallet_addr, set_threshold_seq_number);
+        execute_remove_owner(&sender, &multisig_wallet, remove_owner_seq_number);
+        execute_set_threshold(&sender, &multisig_wallet, set_threshold_seq_number);
     }
 
     #[test_only]
