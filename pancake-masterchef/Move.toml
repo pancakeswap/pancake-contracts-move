@@ -1,0 +1,16 @@
+[package]
+name = 'PancakeMasterchef'
+version = '0.0.1'
+
+[dependencies]
+AptosFramework = {git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "72421d32d77f1877ded478e96f5b95914de1df91"}
+AptosStdlib = {git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "72421d32d77f1877ded478e96f5b95914de1df91"}
+PancakeOFT = { local = "../pancake-cake-oft" }
+
+[addresses]
+# masterchef resouce account(generated from origin account)
+pancake_masterchef = "66d32bc5fdfcf9dda281c86bcbb1bf3d8e365061be39be3775eced30072c8326"
+# origin account which create resource account
+masterchef_origin = "485e427d4b1ac1fbfc0c3cd798ce9145da7d71b4f2be80a04c92ef3ee326096e"
+msterchef_admin = "eef8788f3eaa34b936d0bc5897fc40fa3782b1e663bf04edf2cd22fcd18329ff"
+masterchef_upkeep_operator = "485e427d4b1ac1fbfc0c3cd798ce9145da7d71b4f2be80a04c92ef3ee326096e"
