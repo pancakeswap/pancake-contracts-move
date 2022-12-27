@@ -211,6 +211,10 @@ module pancake_multisig_wallet::multisig_wallet {
         tx.owners_seq_number
     }
 
+    public fun is_multisig_txs_registered<ParamsType: copy + store>(multisig_wallet_addr: address): bool {
+        exists<MultisigTxs<ParamsType>>(multisig_wallet_addr)
+    }
+
     public fun register_multisig_txs<ParamsType: copy + store>(sender: &signer) {
         move_to(sender, MultisigTxs<ParamsType> {
             txs: Table::new<u64, MultisigTx<ParamsType>>(),

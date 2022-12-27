@@ -1,0 +1,23 @@
+[package]
+name = "PancakeMasterchefAdmin"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "83641d3f083762f31700060e5e95fbb1cbc28bf0" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "83641d3f083762f31700060e5e95fbb1cbc28bf0" }
+PancakeMultisigWallet = { local = "../../" }
+PancakeMasterchef = { local = "../../../pancake-masterchef" }
+
+[addresses]
+pancake_masterchef_admin = "31a3e4653bcd4f8d0969c9a62021a46ae22499d417f953dd534cef4018739763"
+pancake_masterchef_admin_dev = "088abe925e47e0872d15b50561846907a2361e6011980cee9c8ecafb15ca633a"
+pancake_masterchef_admin_owner1 = "2e7a6193f23bbab1c8950d743b836619c132c97210abec5941bdac9bd7af4aba"
+pancake_masterchef_admin_owner2 = "9283ac804a758840e109701dc20f9848798aeef775fa072b33d9966f50b7a4a4"
+pancake_masterchef_admin_owner3 = "41264f98d87846557e3187b5a33eb5ebe87fd10d96a12b6dd42a0e96e69c9a2e"
+
+# For testing
+# pancake_masterchef_admin = "bc431e579a51111cd573405fcc5f900e17ac9996e3a85ccaddd7464d3f922ae3"
+# pancake_masterchef_admin_dev = "2466f115a552759cb77319fae04ef47139e2e479c62214e61ec7c479e880e7a1"
+# pancake_masterchef_admin_owner1 = "7ba51953163f85467b6c8329e3dc4cafc4c4e6e8cb4311a85d292a36e4fb3f32"
+# pancake_masterchef_admin_owner2 = "ee45805c0c1133134969f0b7e4c335b2d686a2909f007334f40a36892baf23bf"
+# pancake_masterchef_admin_owner3 = "e2779e742435ea6303dc97124949aeb0337ecc8cfab44b494f7f89d773dcb2fb"

@@ -7,7 +7,7 @@ AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir 
 AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "83641d3f083762f31700060e5e95fbb1cbc28bf0" }
 
 [addresses]
-pancake_multisig_wallet = "9608ab12a43a8170746605d0b0314986eab11248fc5380bb0305cdb6352f7c2d"
+pancake_multisig_wallet = "37428141bff87d05956c1cc7362b743de28a701da1ca66e4d79cb022bfcb01b2"
 pancake_multisig_wallet_dev = "088abe925e47e0872d15b50561846907a2361e6011980cee9c8ecafb15ca633a"
 
 # For testing

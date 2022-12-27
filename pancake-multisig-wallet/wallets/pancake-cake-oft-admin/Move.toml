@@ -1,0 +1,23 @@
+[package]
+name = "PancakeCakeOFTAdmin"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "83641d3f083762f31700060e5e95fbb1cbc28bf0" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "83641d3f083762f31700060e5e95fbb1cbc28bf0" }
+PancakeMultisigWallet = { local = "../../" }
+PancakeOFT = { local = "../../../pancake-cake-oft" }
+
+[addresses]
+pancake_cake_oft_admin = "606bf1e3c745c16ae95b079571701592f2025a3e0ce15735e14e803665a63a41"
+pancake_cake_oft_admin_dev = "088abe925e47e0872d15b50561846907a2361e6011980cee9c8ecafb15ca633a"
+pancake_cake_oft_admin_owner1 = "2e7a6193f23bbab1c8950d743b836619c132c97210abec5941bdac9bd7af4aba"
+pancake_cake_oft_admin_owner2 = "9283ac804a758840e109701dc20f9848798aeef775fa072b33d9966f50b7a4a4"
+pancake_cake_oft_admin_owner3 = "41264f98d87846557e3187b5a33eb5ebe87fd10d96a12b6dd42a0e96e69c9a2e"
+
+# For testing
+# pancake_cake_oft_admin = "a4cc67fcfa7f85341c60a2caa69550d568954632f8c29853342e8106545be60e"
+# pancake_cake_oft_admin_dev = "1f272e879451df2efebb962310fd41acfd9f1a5c446f6a5f3f22014494e74225"
+# pancake_cake_oft_admin_owner1 = "2e7a6193f23bbab1c8950d743b836619c132c97210abec5941bdac9bd7af4aba"
+# pancake_cake_oft_admin_owner2 = "9283ac804a758840e109701dc20f9848798aeef775fa072b33d9966f50b7a4a4"
+# pancake_cake_oft_admin_owner3 = "41264f98d87846557e3187b5a33eb5ebe87fd10d96a12b6dd42a0e96e69c9a2e"
