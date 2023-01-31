@@ -1,0 +1,12 @@
+[package]
+name = "PancakePhantomTypes"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "83641d3f083762f31700060e5e95fbb1cbc28bf0" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "83641d3f083762f31700060e5e95fbb1cbc28bf0" }
+
+[addresses]
+pancake_phantom_types = "0x9936836587ca33240d3d3f91844651b16cb07802faf5e34514ed6f78580deb0a"
+default_admin = "db879227e7075058e263d6957bb40ca3f4e5f66ea0691f723c5b9095d9cae253"
+dev = "db879227e7075058e263d6957bb40ca3f4e5f66ea0691f723c5b9095d9cae253"
