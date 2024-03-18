@@ -15,6 +15,7 @@ module pancake_masterchef::masterchef {
     use aptos_framework::resource_account;
 
     use pancake_oft::oft::{CakeOFT as Cake };
+    use aptos_framework::aptos_coin::{AptosCoin as APT};
 
     //
     // Errors.
@@ -33,6 +34,10 @@ module pancake_masterchef::masterchef {
     const ERROR_POOL_USER_INFO_NOT_EXIST: u64 = 10;
     const ERROR_ZERO_ACCOUNT: u64 = 11;
     const ERROR_UPKEEP_ELAPSED_OVER_CAP: u64 = 12;
+    const ERROR_APT_INCENTIVE_INITIALIZED: u64 = 13;
+    const ERROR_APT_INCENTIVE_NOT_INITIALIZED: u64 = 14;
+    const ERROR_APT_INCENTIVE_CLOSED: u64 = 15;
+    const ERROR_APT_REWARD_OVERFLOW: u64 = 16;
 
     //
     // CONSTANTS.
@@ -105,6 +110,16 @@ module pancake_masterchef::masterchef {
         is_regular: bool
     }
 
+    struct APTIncentivePoolInfo has store {
+        start_acc_cake_per_share: u128,
+        end_acc_cake_per_share: u128,
+    }
+
+    struct APTIncentiveInfo has key {
+        global_apt_incentive_rate: u64,
+        close: bool,
+        pid_to_pool_info: TableWithLength<u64, APTIncentivePoolInfo>,
+    }
     //
     // Events.
     //
@@ -178,6 +193,32 @@ module pancake_masterchef::masterchef {
         cake_per_second: u64
     }
 
+    struct APTIncentiveEvents has key {
+        active_pool_events: event::EventHandle<ActivePoolEvent>,
+        close_pool_events: event::EventHandle<ClosePoolEvent>,
+        withdraw_apt_events: event::EventHandle<WithdrawAPTEvent>,
+    }
+
+    /// Event emitted when active new farm pool for APT incentive.
+    struct ActivePoolEvent has drop, store {
+        pid: u64,
+        start_acc_cake_per_share: u128,
+    }
+
+    /// Event emitted when close pool for APT incentive.
+    struct ClosePoolEvent has drop, store {
+        pid: u64,
+        end_acc_cake_per_share: u128,
+    }
+
+    /// Event emitted when APT is withdrawn from an pool.
+    struct WithdrawAPTEvent has drop, store {
+        user: address,
+        pid: u64,
+        amount: u64
+    }
+
+
     fun init_module(sender: &signer) {
         let signer_cap = resource_account::retrieve_resource_account_cap(sender, RESOURCE_ORIGIN);
         let current_timestamp = timestamp::now_seconds();
@@ -213,12 +254,16 @@ module pancake_masterchef::masterchef {
     public entry fun deposit<CoinType>(
         sender: &signer,
         amount: u64
-    ) acquires MasterChef, PoolUserInfo, Events {
+    ) acquires MasterChef, PoolUserInfo, APTIncentiveInfo, Events, APTIncentiveEvents {
         let sender_addr = signer::address_of(sender);
         assert!(coin::is_account_registered<CoinType>(sender_addr), ERROR_COIN_NOT_REGISTERED);
         // Auto reigster cake
         if (!coin::is_account_registered<Cake>(sender_addr)) {
             coin::register<Cake>(sender);
+        };
+        // Auto reigster APT
+        if (!coin::is_account_registered<APT>(sender_addr)) {
+            coin::register<APT>(sender);
         };
 
         let master_chef = borrow_global<MasterChef>(RESOURCE_ACCOUNT);
@@ -250,7 +295,10 @@ module pancake_masterchef::masterchef {
             let pending = (user_info.amount * pool_info.acc_cake_per_share) / ACC_CAKE_PRECISION - user_info.reward_debt;
             assert!(pending <= MAX_U64, ERROR_CAKE_REWARD_OVERFLOW);
             let resource_signer = account::create_signer_with_capability(&master_chef_mut.signer_cap);
-            safe_transfer_cake(&resource_signer, sender_addr, (pending as u64))
+            safe_transfer_cake(&resource_signer, sender_addr, (pending as u64));
+
+            // harvest APT
+            harvest_pending_apt(&resource_signer, pid, sender_addr, user_info.amount, user_info.reward_debt, pool_info.acc_cake_per_share);
         };
         if (amount > 0) {
             // Send coin to resource account
@@ -275,11 +323,15 @@ module pancake_masterchef::masterchef {
     public entry fun withdraw<CoinType>(
         sender: &signer,
         amount: u64
-    ) acquires MasterChef, PoolUserInfo, Events {
+    ) acquires MasterChef, PoolUserInfo, APTIncentiveInfo, Events, APTIncentiveEvents {
         let master_chef = borrow_global<MasterChef>(RESOURCE_ACCOUNT);
         assert!(Table::contains<string::String, u64>(&master_chef.lp_to_pid, type_info::type_name<CoinType>()), ERROR_INVALID_LP_TOKEN);
 
         let sender_addr = signer::address_of(sender);
+        // Auto reigster APT
+        if (!coin::is_account_registered<APT>(sender_addr)) {
+            coin::register<APT>(sender);
+        };
         assert!(exists<PoolUserInfo>(sender_addr), ERROR_POOL_USER_INFO_NOT_EXIST);
         let pid = *Table::borrow<string::String, u64>(&master_chef.lp_to_pid, type_info::type_name<CoinType>());
         let user_info = Table::borrow_mut<u64, UserInfo>(&mut borrow_global_mut<PoolUserInfo>(sender_addr).pid_to_user_info, pid);
@@ -294,6 +346,9 @@ module pancake_masterchef::masterchef {
         let pending = (user_info.amount * pool_info.acc_cake_per_share) / ACC_CAKE_PRECISION - user_info.reward_debt;
         assert!(pending <= MAX_U64, ERROR_CAKE_REWARD_OVERFLOW);
         safe_transfer_cake(&resource_signer, sender_addr, (pending as u64));
+
+        // harvest APT
+        harvest_pending_apt(&resource_signer,pid,sender_addr, user_info.amount, user_info.reward_debt, pool_info.acc_cake_per_share);
 
         if (amount > 0) {
             user_info.amount = user_info.amount - (amount as u128);
@@ -351,7 +406,7 @@ module pancake_masterchef::masterchef {
         alloc_point: u64,
         is_regular: bool,
         with_update: bool
-    ) acquires MasterChef, Events {
+    ) acquires MasterChef, APTIncentiveInfo, Events, APTIncentiveEvents {
         assert!(coin::is_coin_initialized<CoinType>(), ERROR_COIN_NOT_PUBLISHED);
         // Coin decimal should <= 8, large coin decial may cause overflow
         assert!(coin::decimals<CoinType>() <= APTOS_DEFAULT_DECIMAL, ERROR_INVALID_COIN_DECIMAL);
@@ -388,6 +443,29 @@ module pancake_masterchef::masterchef {
                 is_regular,
             }
         );
+
+        // Set APT incentive pool info
+        if(exists<APTIncentiveInfo>(RESOURCE_ACCOUNT)){
+            let apt_incentive_info_mut = borrow_global_mut<APTIncentiveInfo>(RESOURCE_ACCOUNT);
+            if(!apt_incentive_info_mut.close){
+                if (!Table::contains(&apt_incentive_info_mut.pid_to_pool_info, pid)) {
+                    Table::add(&mut apt_incentive_info_mut.pid_to_pool_info, pid, APTIncentivePoolInfo {
+                        start_acc_cake_per_share: 0,
+                        end_acc_cake_per_share: 0,
+                    });
+                };
+
+                let apt_incentive_events = borrow_global_mut<APTIncentiveEvents>(RESOURCE_ACCOUNT);
+                event::emit_event<ActivePoolEvent>(
+                    &mut apt_incentive_events.active_pool_events,
+                    ActivePoolEvent {
+                        pid: pid,
+                        start_acc_cake_per_share: 0,
+                    }
+                );
+
+            }
+        };
 
         let events = borrow_global_mut<Events>(RESOURCE_ACCOUNT);
         event::emit_event<AddPoolEvent>(
@@ -509,6 +587,90 @@ module pancake_masterchef::masterchef {
         );
     }
 
+    /// This function will update start_acc_cake_per_share of all APT incentive pools with the current pool acc_cake_per_share.
+    public entry fun init_apt_incentive(sender: &signer, rate: u64, with_update: bool) acquires MasterChef, APTIncentiveInfo, APTIncentiveEvents, Events{
+        if(with_update){
+            mass_update_pools();
+        };
+
+        let master_chef = borrow_global<MasterChef>(RESOURCE_ACCOUNT);
+        assert!(signer::address_of(sender) == master_chef.admin, ERROR_NOT_ADMIN);
+    
+        assert!(!exists<APTIncentiveInfo>(RESOURCE_ACCOUNT),ERROR_APT_INCENTIVE_INITIALIZED);
+
+        let resource_signer = account::create_signer_with_capability(&master_chef.signer_cap);
+
+        move_to(&resource_signer, APTIncentiveInfo{
+            global_apt_incentive_rate: rate,
+            close: false,
+            pid_to_pool_info: Table::new(),
+        });
+
+        move_to(&resource_signer, APTIncentiveEvents {
+            active_pool_events: account::new_event_handle<ActivePoolEvent>(&resource_signer),
+            close_pool_events: account::new_event_handle<ClosePoolEvent>(&resource_signer),
+            withdraw_apt_events: account::new_event_handle<WithdrawAPTEvent>(&resource_signer),
+        });
+
+        let apt_incentive_info_mut = borrow_global_mut<APTIncentiveInfo>(RESOURCE_ACCOUNT);
+        let i = 0;
+        let len = pool_length();
+
+        let apt_incentive_events = borrow_global_mut<APTIncentiveEvents>(RESOURCE_ACCOUNT);
+
+        while (i < len) {
+            let start_acc_cake_per_share = vector::borrow<PoolInfo>(&borrow_global<MasterChef>(RESOURCE_ACCOUNT).pool_info, i).acc_cake_per_share;
+            Table::add(&mut apt_incentive_info_mut.pid_to_pool_info, i, APTIncentivePoolInfo{
+                start_acc_cake_per_share: start_acc_cake_per_share,
+                end_acc_cake_per_share: 0,
+            });
+
+            event::emit_event<ActivePoolEvent>(
+                &mut apt_incentive_events.active_pool_events,
+                ActivePoolEvent {
+                    pid: i,
+                    start_acc_cake_per_share: start_acc_cake_per_share,
+                }
+            );
+
+            i = i + 1;
+        }
+    }
+
+    /// This function will close APT incentive ,and record the pool end_acc_cake_per_share
+    public entry fun close_apt_incentive(sender: &signer, with_update: bool) acquires MasterChef, APTIncentiveInfo, APTIncentiveEvents, Events{
+        if(with_update){
+            mass_update_pools();
+        };
+
+        let master_chef = borrow_global<MasterChef>(RESOURCE_ACCOUNT);
+        assert!(signer::address_of(sender) == master_chef.admin, ERROR_NOT_ADMIN);
+        assert!(exists<APTIncentiveInfo>(RESOURCE_ACCOUNT),ERROR_APT_INCENTIVE_NOT_INITIALIZED);
+
+        let apt_incentive_info_mut = borrow_global_mut<APTIncentiveInfo>(RESOURCE_ACCOUNT);
+        assert!(!apt_incentive_info_mut.close,ERROR_APT_INCENTIVE_CLOSED);
+        apt_incentive_info_mut.close = true;
+
+        let apt_incentive_events = borrow_global_mut<APTIncentiveEvents>(RESOURCE_ACCOUNT);
+        let i = 0;
+        let len = Table::length<string::String, u64>(&master_chef.lp_to_pid);
+        while (i < len) {
+            let apt_incentive_pool_info = Table::borrow_mut<u64, APTIncentivePoolInfo>(&mut apt_incentive_info_mut.pid_to_pool_info,i);
+            let end_acc_cake_per_share = vector::borrow<PoolInfo>(&master_chef.pool_info, i).acc_cake_per_share;
+            apt_incentive_pool_info.end_acc_cake_per_share = end_acc_cake_per_share;
+            
+            event::emit_event<ClosePoolEvent>(
+                &mut apt_incentive_events.close_pool_events,
+                ClosePoolEvent {
+                    pid: i,
+                    end_acc_cake_per_share: end_acc_cake_per_share
+                }
+            );
+
+            i = i + 1;
+        }
+    }
+
     /// Upkeep is an interface completely different from Masterchef on the BNB chain.
     /// On BNB chain, CAKE is minted by the Masterchef contract at a speed of 40 CAKEs
     /// per block, while on the Aptos chain, the mint of CAKE is completely dependent on
@@ -611,6 +773,113 @@ module pancake_masterchef::masterchef {
         let user_info = Table::borrow_mut<u64, UserInfo>(&mut pool_user_info.pid_to_user_info, pid);
 
         ((user_info.amount * acc_cake_per_share / ACC_CAKE_PRECISION - user_info.reward_debt) as u64)
+    }
+
+    fun harvest_pending_apt(resource_signer: &signer ,pid: u64, user: address, user_amount: u128, user_reward_debt: u128, latest_acc_cake_per_share: u128) acquires APTIncentiveInfo, APTIncentiveEvents {
+        let pending_apt:u64 = calc_apt_reward(pid, user_amount, user_reward_debt, latest_acc_cake_per_share);
+        if(pending_apt > 0){
+            coin::transfer<APT>(resource_signer, user, pending_apt);
+
+            let apt_incentive_events = borrow_global_mut<APTIncentiveEvents>(RESOURCE_ACCOUNT);
+            event::emit_event<WithdrawAPTEvent>(
+                &mut apt_incentive_events.withdraw_apt_events,
+                WithdrawAPTEvent {
+                    user: user,
+                    pid: pid,
+                    amount: pending_apt
+                }
+            );
+        }
+    }
+
+    #[view]
+    public fun get_pending_apt<CoinType>(user: address): u64 acquires  MasterChef, PoolUserInfo, APTIncentiveInfo {
+        let master_chef = borrow_global<MasterChef>(RESOURCE_ACCOUNT);
+        assert!(Table::contains<string::String, u64>(&master_chef.lp_to_pid, type_info::type_name<CoinType>()), ERROR_INVALID_LP_TOKEN);
+        let pid = *Table::borrow<string::String, u64>(&master_chef.lp_to_pid, type_info::type_name<CoinType>());
+        let pool_info = vector::borrow<PoolInfo>(&master_chef.pool_info, pid);
+        let pending_apt:u64 = 0;
+        if(exists<PoolUserInfo>(user)){
+            let pool_user_info = borrow_global<PoolUserInfo>(user);
+            if (Table::contains(&pool_user_info.pid_to_user_info, pid)){
+                let user_info = Table::borrow<u64, UserInfo>(&pool_user_info.pid_to_user_info, pid);
+                pending_apt = calc_apt_reward(pid, user_info.amount, user_info.reward_debt, pool_info.acc_cake_per_share);
+            }
+        };
+
+        pending_apt
+    }
+
+    #[view]
+    public fun get_apt_incentive_info(): (u64, bool) acquires APTIncentiveInfo {
+        if(exists<APTIncentiveInfo>(RESOURCE_ACCOUNT)){
+            let apt_incentive_info = borrow_global<APTIncentiveInfo>(RESOURCE_ACCOUNT);
+            (apt_incentive_info.global_apt_incentive_rate, apt_incentive_info.close)
+        }else{
+            (0, false)
+        }
+    }
+
+    #[view]
+    public fun get_apt_incentive_pool_info(pid: u64): (u128, u128) acquires APTIncentiveInfo {
+        let start_acc_cake_per_share: u128 = 0;
+        let end_acc_cake_per_share: u128 = 0;
+        if(exists<APTIncentiveInfo>(RESOURCE_ACCOUNT)){
+            let apt_incentive_info = borrow_global<APTIncentiveInfo>(RESOURCE_ACCOUNT);
+            if(Table::contains(&apt_incentive_info.pid_to_pool_info, pid)){
+                let apt_incentive_pool_info = Table::borrow<u64, APTIncentivePoolInfo>(&apt_incentive_info.pid_to_pool_info,pid);
+                start_acc_cake_per_share = apt_incentive_pool_info.start_acc_cake_per_share;
+                end_acc_cake_per_share = apt_incentive_pool_info.end_acc_cake_per_share;
+            }   
+        };
+
+        (start_acc_cake_per_share, end_acc_cake_per_share)
+    }
+
+    fun calc_apt_reward(pid: u64, user_amount: u128, user_reward_debt: u128, latest_acc_cake_per_share: u128): u64 acquires APTIncentiveInfo {
+        let pending_apt: u64 = 0;
+        if (user_amount > 0 && exists<APTIncentiveInfo>(RESOURCE_ACCOUNT)) {
+            let apt_incentive_info = borrow_global<APTIncentiveInfo>(RESOURCE_ACCOUNT);
+            if (Table::contains(&apt_incentive_info.pid_to_pool_info, pid)){
+                // Calculate incentive APT amount
+                let last_acc_cake_per_share = user_reward_debt * ACC_CAKE_PRECISION / user_amount;
+
+                let apt_incentive_pool_info = Table::borrow<u64, APTIncentivePoolInfo>(&apt_incentive_info.pid_to_pool_info,pid);
+
+                let is_active_pool: bool = true;
+                // When the end_acc_cake_per_share is equal to start_acc_cake_per_share, we need to set is_active_pool as false
+                // This means that the apt incentive pool was created, but did not have any cake incentives before it was closed.
+                if(apt_incentive_info.close && apt_incentive_pool_info.start_acc_cake_per_share == apt_incentive_pool_info.end_acc_cake_per_share){
+                    is_active_pool = false;
+                };
+                if(is_active_pool && (apt_incentive_pool_info.end_acc_cake_per_share == 0 || apt_incentive_pool_info.end_acc_cake_per_share > last_acc_cake_per_share)){
+                    let start_acc_cake_per_share:u128 = last_acc_cake_per_share;
+                    let end_acc_cake_per_share:u128 = latest_acc_cake_per_share;
+
+                    if(apt_incentive_pool_info.start_acc_cake_per_share > last_acc_cake_per_share){
+                        start_acc_cake_per_share = apt_incentive_pool_info.start_acc_cake_per_share;
+                    };
+
+                    if(apt_incentive_pool_info.end_acc_cake_per_share > 0 && latest_acc_cake_per_share > apt_incentive_pool_info.end_acc_cake_per_share){
+                        end_acc_cake_per_share = apt_incentive_pool_info.end_acc_cake_per_share;
+                    };
+                    if(end_acc_cake_per_share > start_acc_cake_per_share){
+                        let valid_pending_cake = user_amount * (end_acc_cake_per_share - start_acc_cake_per_share) / ACC_CAKE_PRECISION;
+                        let pending_apt_u128 = valid_pending_cake * (apt_incentive_info.global_apt_incentive_rate as u128) /(TOTAL_CAKE_RATE_PRECISION as u128);
+                        assert!(pending_apt_u128 <= MAX_U64, ERROR_APT_REWARD_OVERFLOW);
+                        pending_apt = (pending_apt_u128 as u64);
+                        if(pending_apt > 0){
+                            let balance = coin::balance<APT>(RESOURCE_ACCOUNT);
+                            if (balance < pending_apt) {
+                                pending_apt = balance;
+                            };
+                            
+                        }
+                    }
+                }
+            }
+        };
+        pending_apt
     }
 
     fun calc_cake_reward(pid: u64): (u64, u128) acquires MasterChef {
