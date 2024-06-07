@@ -1,0 +1,13 @@
+[package]
+name = "PancakeIFO"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+PancakePhantomTypes = { local = "../pancake-phantom-types" }
+
+[addresses]
+IFO_dev = "55ff4586b45afcd549576f7d26a35ddf78960efaa309d9853d69d6b6449ed823"
+pancake_IFO = "488c277a7dabb9dca5352c573a441f3a41f473f664e469465924af22eb3fd4bd"
+IFO_default_admin = "a2c656b06aeff1406fd5ff837fa5b07825437a5f1ce6d75cad3f4e5c39ea955b"
