@@ -260,6 +260,8 @@ module pancake_oft::oft {
     use layerzero_common::packet;
     #[test_only]
     use aptos_framework::timestamp::fast_forward_seconds;
+    #[test_only]
+    use aptos_framework::genesis;
 
     #[test(
         aptos = @aptos_framework,
@@ -291,6 +293,7 @@ module pancake_oft::oft {
         alice: &signer,
         bob: &signer
     ) acquires OFT, OFTCap, Capabilities, EventStore {
+        genesis::setup();
         oft::setup(
             aptos,
             core_resources,
@@ -324,8 +327,10 @@ module pancake_oft::oft {
         // user address
         let (alice_addr, bob_addr) = (address_of(alice), address_of(bob));
         let (_alice_addr_bytes, bob_addr_bytes) = (bcs::to_bytes(&alice_addr), bcs::to_bytes(&bob_addr));
-
-        resource_account::create_resource_account(oft_origin, b"pancake-oft", x"your-authen-key");
+        // replace pancake_oft_origin if you changed in Move.toml
+        // replace the seed if you use different seed
+        account::create_account_for_test(signer::address_of(oft_origin));
+        resource_account::create_resource_account(oft_origin, b"pancake-oft", vector::empty());
         // init oft
         initialize(oft);
 
