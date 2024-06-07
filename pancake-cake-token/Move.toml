@@ -1,0 +1,11 @@
+[package]
+name = "PancakeCakeToken"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = {git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217"}
+AptosStdlib = {git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217"}
+
+[addresses]
+pancake_cake_token = "f067469fe775cbc1ab0afba9f28e6f97b9359f2b21e308495424e8751f75bcc2"
+cake_token_zero_account = "0000000000000000000000000000000000000000000000000000000000000000"
