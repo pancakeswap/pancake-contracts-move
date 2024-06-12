@@ -45,6 +45,17 @@ module pancake_masterchef_admin::admin {
         code: vector<vector<u8>>,
     }
 
+    struct InitAPTIncentiveParams has copy, store {
+        rate: u64,
+        with_update: bool,
+    }
+
+    struct CloseAPTIncentiveParams has copy, store {
+        with_update: bool,
+    }
+
+
+
     fun init_module(sender: &signer) {
         let owners = vector[@pancake_masterchef_admin_owner1, @pancake_masterchef_admin_owner2, @pancake_masterchef_admin_owner3];
         let threshold = 2;
@@ -55,6 +66,8 @@ module pancake_masterchef_admin::admin {
         multisig_wallet::register_multisig_txs<SetPoolParams>(sender);
         multisig_wallet::register_multisig_txs<UpdateCakeRateParams>(sender);
         multisig_wallet::register_multisig_txs<UpgradeMasterchefParams>(sender);
+        multisig_wallet::register_multisig_txs<InitAPTIncentiveParams>(sender);
+        multisig_wallet::register_multisig_txs<CloseAPTIncentiveParams>(sender);
 
         let signer_cap = resource_account::retrieve_resource_account_cap(sender, @pancake_masterchef_admin_dev);
         move_to(sender, Capabilities {
@@ -172,6 +185,9 @@ module pancake_masterchef_admin::admin {
         let expiration = eta + GRACE_PERIOD;
         let capabilities = borrow_global<Capabilities>(MULTISIG_WALLET_ADDRESS);
         let signer = account::create_signer_with_capability(&capabilities.signer_cap);
+        if(!multisig_wallet::is_multisig_txs_registered<AddPoolParams<CoinType>>(MULTISIG_WALLET_ADDRESS)){
+            multisig_wallet::register_multisig_txs<AddPoolParams<CoinType>>(&signer);
+        };
         multisig_wallet::init_multisig_tx<AddPoolParams<CoinType>>(sender, &signer, eta, expiration, AddPoolParams<CoinType> {
             alloc_point,
             is_regular,
@@ -211,6 +227,25 @@ module pancake_masterchef_admin::admin {
         });
     }
 
+    public entry fun init_init_apt_incentive(sender: &signer, eta: u64, rate: u64, with_update: bool) acquires Capabilities {
+        let expiration = eta + GRACE_PERIOD;
+        let capabilities = borrow_global<Capabilities>(MULTISIG_WALLET_ADDRESS);
+        let signer = account::create_signer_with_capability(&capabilities.signer_cap);
+        multisig_wallet::init_multisig_tx<InitAPTIncentiveParams>(sender, &signer, eta, expiration, InitAPTIncentiveParams {
+            rate,
+            with_update,
+        });
+    }
+
+    public entry fun init_close_apt_incentive(sender: &signer, eta: u64, with_update: bool) acquires Capabilities {
+        let expiration = eta + GRACE_PERIOD;
+        let capabilities = borrow_global<Capabilities>(MULTISIG_WALLET_ADDRESS);
+        let signer = account::create_signer_with_capability(&capabilities.signer_cap);
+        multisig_wallet::init_multisig_tx<CloseAPTIncentiveParams>(sender, &signer, eta, expiration, CloseAPTIncentiveParams {
+            with_update,
+        });
+    }
+
     public entry fun approve_set_admin(sender: &signer, seq_number: u64) acquires Capabilities {
         let capabilities = borrow_global<Capabilities>(MULTISIG_WALLET_ADDRESS);
         let signer = account::create_signer_with_capability(&capabilities.signer_cap);
@@ -245,6 +280,18 @@ module pancake_masterchef_admin::admin {
         let capabilities = borrow_global<Capabilities>(MULTISIG_WALLET_ADDRESS);
         let signer = account::create_signer_with_capability(&capabilities.signer_cap);
         multisig_wallet::approve_multisig_tx<UpgradeMasterchefParams>(sender, &signer, seq_number);
+    }
+
+    public entry fun approve_init_apt_incentive(sender: &signer, seq_number: u64) acquires Capabilities {
+        let capabilities = borrow_global<Capabilities>(MULTISIG_WALLET_ADDRESS);
+        let signer = account::create_signer_with_capability(&capabilities.signer_cap);
+        multisig_wallet::approve_multisig_tx<InitAPTIncentiveParams>(sender, &signer, seq_number);
+    }
+
+    public entry fun approve_close_apt_incentive(sender: &signer, seq_number: u64) acquires Capabilities {
+        let capabilities = borrow_global<Capabilities>(MULTISIG_WALLET_ADDRESS);
+        let signer = account::create_signer_with_capability(&capabilities.signer_cap);
+        multisig_wallet::approve_multisig_tx<CloseAPTIncentiveParams>(sender, &signer, seq_number);
     }
 
     public entry fun execute_set_admin(sender: &signer, seq_number: u64) acquires Capabilities {
@@ -305,6 +352,26 @@ module pancake_masterchef_admin::admin {
 
         let UpgradeMasterchefParams { metadata, code } = multisig_wallet::multisig_tx_params<UpgradeMasterchefParams>(MULTISIG_WALLET_ADDRESS, seq_number);
         masterchef::upgrade_masterchef(&signer, metadata, code);
+    }
+
+    public entry fun execute_init_apt_incentive(sender: &signer, seq_number: u64) acquires Capabilities {
+        let capabilities = borrow_global<Capabilities>(MULTISIG_WALLET_ADDRESS);
+        let signer = account::create_signer_with_capability(&capabilities.signer_cap);
+
+        multisig_wallet::execute_multisig_tx<InitAPTIncentiveParams>(sender, &signer, seq_number);
+
+        let InitAPTIncentiveParams { rate, with_update } = multisig_wallet::multisig_tx_params<InitAPTIncentiveParams>(MULTISIG_WALLET_ADDRESS, seq_number);
+        masterchef::init_apt_incentive(&signer, rate, with_update);
+    }
+
+    public entry fun execute_close_apt_incentive(sender: &signer, seq_number: u64) acquires Capabilities {
+        let capabilities = borrow_global<Capabilities>(MULTISIG_WALLET_ADDRESS);
+        let signer = account::create_signer_with_capability(&capabilities.signer_cap);
+
+        multisig_wallet::execute_multisig_tx<CloseAPTIncentiveParams>(sender, &signer, seq_number);
+
+        let CloseAPTIncentiveParams { with_update } = multisig_wallet::multisig_tx_params<CloseAPTIncentiveParams>(MULTISIG_WALLET_ADDRESS, seq_number);
+        masterchef::close_apt_incentive(&signer, with_update);
     }
 
     #[test_only]
@@ -457,6 +524,9 @@ module pancake_masterchef_admin::admin {
     }
 
     #[test_only]
+    const MASTERCHEF_DEFAULT_ADMIN: address = @msterchef_admin;
+
+    #[test_only]
     fun before_each_test(
         sender: &signer,
         pancake_multisig_wallet_dev: &signer,
@@ -472,16 +542,19 @@ module pancake_masterchef_admin::admin {
         account::create_account_for_test(signer::address_of(pancake_multisig_wallet_dev));
         account::create_account_for_test(signer::address_of(pancake_masterchef_admin_dev));
         account::create_account_for_test(signer::address_of(pancake_masterchef_dev));
+        // account::create_account_for_test(signer::address_of(pancake_masterchef));
 
-        resource_account::create_resource_account(pancake_multisig_wallet_dev, b"pancake_multisig_wallet", x"");
+        resource_account::create_resource_account(pancake_multisig_wallet_dev, b"pancake_multisig_wallet_v4", x"");
         multisig_wallet::init_module_for_test(pancake_multisig_wallet);
 
-        resource_account::create_resource_account(pancake_masterchef_admin_dev, b"pancake_masterchef_admin", x"");
+        resource_account::create_resource_account(pancake_masterchef_admin_dev, b"pancake_cake_oft_admin_v2", x"");
         init_module(pancake_masterchef_admin);
 
-        resource_account::create_resource_account(pancake_masterchef_dev, b"pancake_masterchef", x"");
-        // let ra = account::create_resource_address(&signer::address_of(pancake_masterchef_dev), b"pancake_masterchef");
-        // std::debug::print(&ra);
+        resource_account::create_resource_account(pancake_masterchef_dev, b"pancake-masterchef", x"");
         masterchef::initialize(pancake_masterchef);
+
+        // set admin
+        let masterchef_default_admin_signer = account::create_account_for_test(MASTERCHEF_DEFAULT_ADMIN);
+        masterchef::set_admin(&masterchef_default_admin_signer, signer::address_of(pancake_masterchef_admin));
     }
 }
