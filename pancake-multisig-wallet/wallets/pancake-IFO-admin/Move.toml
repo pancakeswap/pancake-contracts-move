@@ -1,0 +1,16 @@
+[package]
+name = "PancakeIFOMultisigWallet"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+PancakeMultisigWallet = { local = "../../" }
+PancakeIFO = { local = "../../../pancake-IFO" }
+
+[addresses]
+IFO_multisig_wallet = "b33f884c476f8a2a2e09bfe2c38fc5fad8c637ed6993910ba88decb47ff82118"
+IFO_multisig_wallet_dev = "13d3fa1db725eeac010b94d54c05f238fde460544caad95cc7f9d4a867ba31c3"
+IFO_multisig_wallet_owner1 = "2e7a6193f23bbab1c8950d743b836619c132c97210abec5941bdac9bd7af4aba"
+IFO_multisig_wallet_owner2 = "9283ac804a758840e109701dc20f9848798aeef775fa072b33d9966f50b7a4a4"
+IFO_multisig_wallet_owner3 = "41264f98d87846557e3187b5a33eb5ebe87fd10d96a12b6dd42a0e96e69c9a2e"
