@@ -9,9 +9,10 @@ module pancake_masterchef::masterchef_test {
     use aptos_framework::managed_coin;
     use aptos_framework::resource_account;
     use aptos_framework::timestamp::fast_forward_seconds;
+    use aptos_framework::aptos_coin::{AptosCoin as APT};
 
     use pancake_masterchef::masterchef;
-    use pancake_cake_token::pancake::{Self, Cake};
+    use pancake_oft::oft::{CakeOFT};
 
     //
     // CONSTANTS.
@@ -21,6 +22,9 @@ module pancake_masterchef::masterchef_test {
     const BASE_APTOS: u64 = 100000000;
     const DEFAULT_COIN_MONITOR_SUPPLY: bool = false;
     const DEFAULT_ERROR_CODE: u64 = 100;
+    const APTOS_CORE: address = @0x1;
+    const OFT: address = @pancake_oft;
+
 
     //
     // STRUCTS.
@@ -31,7 +35,7 @@ module pancake_masterchef::masterchef_test {
     struct TestUSDC {}
     struct TestBNB {}
 
-    #[test(dev = @masterchef_dev, admin= @admin, upkeep_admin=@upkeep_admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345, user3 = @0x3456, user4 = @0x4567)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, upkeep_admin=@masterchef_upkeep_operator, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345, user3 = @0x3456, user4 = @0x4567)]
     fun test_all_in_one_upkeep(dev: &signer, admin: &signer, upkeep_admin: &signer, resource_account: &signer, user1: &signer, user2: &signer, user3: &signer, user4: &signer) {
         before_each(dev, admin, resource_account);
         if (!account::exists_at(signer::address_of(upkeep_admin))){
@@ -50,24 +54,24 @@ module pancake_masterchef::masterchef_test {
         // user1 prepare
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * BASE_APTOS);
         register_and_mint<TestBUSD>(resource_account, user1, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user1);
+        managed_coin::register<CakeOFT>(user1);
         // user2 prepare
         register_and_mint<TestCAKE>(resource_account, user2, 1000 * BASE_APTOS);
         register_and_mint<TestBUSD>(resource_account, user2, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user2);
+        managed_coin::register<CakeOFT>(user2);
         // user3 prepare
         register_and_mint<TestUSDC>(resource_account, user3, 1000 * BASE_APTOS);
         register_and_mint<TestBNB>(resource_account, user3, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user3);
+        managed_coin::register<CakeOFT>(user3);
         // user4 prepare
         register_and_mint<TestUSDC>(resource_account, user4, 1000 * BASE_APTOS);
         register_and_mint<TestBNB>(resource_account, user4, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user4);
+        managed_coin::register<CakeOFT>(user4);
 
         // mint CAKE for upkeep admin
-        managed_coin::register<Cake>(upkeep_admin);
-        pancake::mint(resource_account, 100000 * BASE_APTOS);
-        pancake::transfer(resource_account, signer::address_of(upkeep_admin), 100000 * BASE_APTOS);
+        managed_coin::register<CakeOFT>(upkeep_admin);
+        let cake_oft_signer = account::create_account_for_test(OFT);
+        register_and_mint<CakeOFT>(&cake_oft_signer, upkeep_admin, 100000 * BASE_APTOS);
 
         // C admin upkeep elapsed 30s with 120 CAKE
         masterchef::upkeep(upkeep_admin, 120 * BASE_APTOS, 30, true);
@@ -270,20 +274,20 @@ module pancake_masterchef::masterchef_test {
         let user1_balance_plus_pending = (
             masterchef::pending_cake(0, signer::address_of(user1)) +
             masterchef::pending_cake(1, signer::address_of(user1)) +
-            coin::balance<Cake>(signer::address_of(user1))
+            coin::balance<CakeOFT>(signer::address_of(user1))
         );
         let user2_balance_plus_pending = (
             masterchef::pending_cake(0, signer::address_of(user2)) +
             masterchef::pending_cake(1, signer::address_of(user2)) +
-            coin::balance<Cake>(signer::address_of(user2))
+            coin::balance<CakeOFT>(signer::address_of(user2))
         );
         let user3_balance_plus_pending = (
             masterchef::pending_cake(2, signer::address_of(user3)) +
-            coin::balance<Cake>(signer::address_of(user3))
+            coin::balance<CakeOFT>(signer::address_of(user3))
         );
         let user4_balance_plus_pending = (
             masterchef::pending_cake(3, signer::address_of(user4)) +
-            coin::balance<Cake>(signer::address_of(user4))
+            coin::balance<CakeOFT>(signer::address_of(user4))
         );
 
         assert!(user1_balance_plus_pending / 100 == 21683685, DEFAULT_ERROR_CODE);
@@ -292,7 +296,7 @@ module pancake_masterchef::masterchef_test {
         assert!(user4_balance_plus_pending / 100 == 34759895, DEFAULT_ERROR_CODE);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, upkeep_admin=@upkeep_admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345, user3 = @0x3456, user4 = @0x4567)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, upkeep_admin=@masterchef_upkeep_operator, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345, user3 = @0x3456, user4 = @0x4567)]
     fun test_all_in_one_delayed_upkeep(dev: &signer, admin: &signer, upkeep_admin: &signer, resource_account: &signer, user1: &signer, user2: &signer, user3: &signer, user4: &signer) {
         before_each(dev, admin, resource_account);
         if (!account::exists_at(signer::address_of(upkeep_admin))){
@@ -311,24 +315,24 @@ module pancake_masterchef::masterchef_test {
         // user1 prepare
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * BASE_APTOS);
         register_and_mint<TestBUSD>(resource_account, user1, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user1);
+        managed_coin::register<CakeOFT>(user1);
         // user2 prepare
         register_and_mint<TestCAKE>(resource_account, user2, 1000 * BASE_APTOS);
         register_and_mint<TestBUSD>(resource_account, user2, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user2);
+        managed_coin::register<CakeOFT>(user2);
         // user3 prepare
         register_and_mint<TestUSDC>(resource_account, user3, 1000 * BASE_APTOS);
         register_and_mint<TestBNB>(resource_account, user3, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user3);
+        managed_coin::register<CakeOFT>(user3);
         // user4 prepare
         register_and_mint<TestUSDC>(resource_account, user4, 1000 * BASE_APTOS);
         register_and_mint<TestBNB>(resource_account, user4, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user4);
+        managed_coin::register<CakeOFT>(user4);
 
         // mint CAKE for upkeep admin
-        managed_coin::register<Cake>(upkeep_admin);
-        pancake::mint(resource_account, 100000 * BASE_APTOS);
-        pancake::transfer(resource_account, signer::address_of(upkeep_admin), 100000 * BASE_APTOS);
+        managed_coin::register<CakeOFT>(upkeep_admin);
+        let cake_oft_signer = account::create_account_for_test(OFT);
+        register_and_mint<CakeOFT>(&cake_oft_signer, upkeep_admin, 100000 * BASE_APTOS);
 
         // C admin upkeep elapsed 30s with 120 CAKE
         masterchef::upkeep(upkeep_admin, 120 * BASE_APTOS, 30, true);
@@ -531,20 +535,20 @@ module pancake_masterchef::masterchef_test {
         let user1_balance_plus_pending = (
             masterchef::pending_cake(0, signer::address_of(user1)) +
             masterchef::pending_cake(1, signer::address_of(user1)) +
-            coin::balance<Cake>(signer::address_of(user1))
+            coin::balance<CakeOFT>(signer::address_of(user1))
         );
         let user2_balance_plus_pending = (
             masterchef::pending_cake(0, signer::address_of(user2)) +
             masterchef::pending_cake(1, signer::address_of(user2)) +
-            coin::balance<Cake>(signer::address_of(user2))
+            coin::balance<CakeOFT>(signer::address_of(user2))
         );
         let user3_balance_plus_pending = (
             masterchef::pending_cake(2, signer::address_of(user3)) +
-            coin::balance<Cake>(signer::address_of(user3))
+            coin::balance<CakeOFT>(signer::address_of(user3))
         );
         let user4_balance_plus_pending = (
             masterchef::pending_cake(3, signer::address_of(user4)) +
-            coin::balance<Cake>(signer::address_of(user4))
+            coin::balance<CakeOFT>(signer::address_of(user4))
         );
 
         assert!(user1_balance_plus_pending / 100 == 20548644, DEFAULT_ERROR_CODE);
@@ -553,7 +557,7 @@ module pancake_masterchef::masterchef_test {
         assert!(user4_balance_plus_pending / 100 == 33050000, DEFAULT_ERROR_CODE);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, upkeep_admin=@upkeep_admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345, user3 = @0x3456, user4 = @0x4567)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, upkeep_admin=@masterchef_upkeep_operator, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345, user3 = @0x3456, user4 = @0x4567)]
     fun test_all_in_one_never_upkeep(dev: &signer, admin: &signer, upkeep_admin: &signer, resource_account: &signer, user1: &signer, user2: &signer, user3: &signer, user4: &signer) {
        before_each(dev, admin, resource_account);
         if (!account::exists_at(signer::address_of(upkeep_admin))){
@@ -572,24 +576,24 @@ module pancake_masterchef::masterchef_test {
         // user1 prepare
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * BASE_APTOS);
         register_and_mint<TestBUSD>(resource_account, user1, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user1);
+        managed_coin::register<CakeOFT>(user1);
         // user2 prepare
         register_and_mint<TestCAKE>(resource_account, user2, 1000 * BASE_APTOS);
         register_and_mint<TestBUSD>(resource_account, user2, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user2);
+        managed_coin::register<CakeOFT>(user2);
         // user3 prepare
         register_and_mint<TestUSDC>(resource_account, user3, 1000 * BASE_APTOS);
         register_and_mint<TestBNB>(resource_account, user3, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user3);
+        managed_coin::register<CakeOFT>(user3);
         // user4 prepare
         register_and_mint<TestUSDC>(resource_account, user4, 1000 * BASE_APTOS);
         register_and_mint<TestBNB>(resource_account, user4, 1000 * BASE_APTOS);
-        managed_coin::register<Cake>(user4);
+        managed_coin::register<CakeOFT>(user4);
 
         // mint CAKE for upkeep admin
-        managed_coin::register<Cake>(upkeep_admin);
-        pancake::mint(resource_account, 100000 * BASE_APTOS);
-        pancake::transfer(resource_account, signer::address_of(upkeep_admin), 100000 * BASE_APTOS);
+        managed_coin::register<CakeOFT>(upkeep_admin);
+        let cake_oft_signer = account::create_account_for_test(OFT);
+        register_and_mint<CakeOFT>(&cake_oft_signer, upkeep_admin, 100000 * BASE_APTOS);
 
         // C admin upkeep elapsed 30s with 120 CAKE
         masterchef::upkeep(upkeep_admin, 120 * BASE_APTOS, 30, true);
@@ -792,20 +796,20 @@ module pancake_masterchef::masterchef_test {
         let user1_balance_plus_pending = (
             masterchef::pending_cake(0, signer::address_of(user1)) +
             masterchef::pending_cake(1, signer::address_of(user1)) +
-            coin::balance<Cake>(signer::address_of(user1))
+            coin::balance<CakeOFT>(signer::address_of(user1))
         );
         let user2_balance_plus_pending = (
             masterchef::pending_cake(0, signer::address_of(user2)) +
             masterchef::pending_cake(1, signer::address_of(user2)) +
-            coin::balance<Cake>(signer::address_of(user2))
+            coin::balance<CakeOFT>(signer::address_of(user2))
         );
         let user3_balance_plus_pending = (
             masterchef::pending_cake(2, signer::address_of(user3)) +
-            coin::balance<Cake>(signer::address_of(user3))
+            coin::balance<CakeOFT>(signer::address_of(user3))
         );
         let user4_balance_plus_pending = (
             masterchef::pending_cake(3, signer::address_of(user4)) +
-            coin::balance<Cake>(signer::address_of(user4))
+            coin::balance<CakeOFT>(signer::address_of(user4))
         );
 
         assert!(user1_balance_plus_pending / 100 == 17306666, DEFAULT_ERROR_CODE);
@@ -814,7 +818,7 @@ module pancake_masterchef::masterchef_test {
         assert!(user4_balance_plus_pending / 100 == 12400000, DEFAULT_ERROR_CODE);
     }
 
-    // #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345, user3 = @0x3456, user4 = @0x4567)]
+    // #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345, user3 = @0x3456, user4 = @0x4567)]
     // fun test_all_in_one(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer, user2: &signer, user3: &signer, user4: &signer) {
     //     before_each(dev, admin, resource_account);
     //     init_coins<TestCAKE>(resource_account, b"CAKE", b"CAKE");
@@ -830,20 +834,20 @@ module pancake_masterchef::masterchef_test {
     //     // user1 prepare
     //     register_and_mint<TestCAKE>(resource_account, user1, 1000 * BASE_APTOS);
     //     register_and_mint<TestBUSD>(resource_account, user1, 1000 * BASE_APTOS);
-    //     managed_coin::register<Cake>(user1);
+    //     managed_coin::register<CakeOFT>(user1);
     //     // user2 prepare
     //     register_and_mint<TestCAKE>(resource_account, user2, 1000 * BASE_APTOS);
     //     register_and_mint<TestBUSD>(resource_account, user2, 1000 * BASE_APTOS);
-    //     managed_coin::register<Cake>(user2);
+    //     managed_coin::register<CakeOFT>(user2);
     //     // user3 prepare
     //     register_and_mint<TestUSDC>(resource_account, user3, 1000 * BASE_APTOS);
     //     register_and_mint<TestBNB>(resource_account, user3, 1000 * BASE_APTOS);
-    //     managed_coin::register<Cake>(user3);
+    //     managed_coin::register<CakeOFT>(user3);
     //     // masterchef::update_whitelist(admin, signer::address_of(user3), true);
     //     // user4 prepare
     //     register_and_mint<TestUSDC>(resource_account, user4, 1000 * BASE_APTOS);
     //     register_and_mint<TestBNB>(resource_account, user4, 1000 * BASE_APTOS);
-    //     managed_coin::register<Cake>(user4);
+    //     managed_coin::register<CakeOFT>(user4);
     //     // masterchef::update_whitelist(admin, signer::address_of(user4), true);
 
     //     // D admin add regular pool, pid = 0, alloc point = 1
@@ -1044,20 +1048,20 @@ module pancake_masterchef::masterchef_test {
     //     let user1_balance_plus_pending = (
     //         masterchef::pending_cake(0, signer::address_of(user1)) +
     //         masterchef::pending_cake(1, signer::address_of(user1)) +
-    //         coin::balance<Cake>(signer::address_of(user1))
+    //         coin::balance<CakeOFT>(signer::address_of(user1))
     //     );
     //     let user2_balance_plus_pending = (
     //         masterchef::pending_cake(0, signer::address_of(user2)) +
     //         masterchef::pending_cake(1, signer::address_of(user2)) +
-    //         coin::balance<Cake>(signer::address_of(user2))
+    //         coin::balance<CakeOFT>(signer::address_of(user2))
     //     );
     //     let user3_balance_plus_pending = (
     //         masterchef::pending_cake(2, signer::address_of(user3)) +
-    //         coin::balance<Cake>(signer::address_of(user3))
+    //         coin::balance<CakeOFT>(signer::address_of(user3))
     //     );
     //     let user4_balance_plus_pending = (
     //         masterchef::pending_cake(3, signer::address_of(user4)) +
-    //         coin::balance<Cake>(signer::address_of(user4))
+    //         coin::balance<CakeOFT>(signer::address_of(user4))
     //     );
 
     //     assert!(user1_balance_plus_pending / 100 == 20973589, DEFAULT_ERROR_CODE);
@@ -1066,7 +1070,7 @@ module pancake_masterchef::masterchef_test {
     //     assert!(user4_balance_plus_pending / 100 == 38883333, DEFAULT_ERROR_CODE);
     // }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345)]
     fun test_deposit(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer, user2: &signer) {
         before_each(dev, admin, resource_account);
         // pid = 0
@@ -1077,8 +1081,8 @@ module pancake_masterchef::masterchef_test {
         account::create_account_for_test(signer::address_of(user1));
         account::create_account_for_test(signer::address_of(user2));
 
-        managed_coin::register<Cake>(user1);
-        managed_coin::register<Cake>(user2);
+        managed_coin::register<CakeOFT>(user1);
+        managed_coin::register<CakeOFT>(user2);
 
         register_and_mint<TestCAKE>(resource_account, user1, 100 * pow(10, 8));
         register_and_mint<TestCAKE>(resource_account, user2, 100 * pow(10, 8));
@@ -1121,7 +1125,7 @@ module pancake_masterchef::masterchef_test {
         assert!(coin::balance<TestCAKE>(signer::address_of(user2)) == 9999999900, DEFAULT_ERROR_CODE);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
     #[expected_failure(abort_code = 2)]
     fun test_deposit_wrong_lp_token(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer) {
         before_each(dev, admin, resource_account);
@@ -1136,7 +1140,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::deposit<TestBUSD>(user1, 100);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
     #[expected_failure(abort_code = 7)]
     fun test_deposit_coin_not_registered(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer) {
         before_each(dev, admin, resource_account);
@@ -1144,7 +1148,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::deposit<TestCAKE>(user1, 100);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
     fun test_deposit_auto_register_cake(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
@@ -1155,15 +1159,15 @@ module pancake_masterchef::masterchef_test {
         masterchef::deposit<TestCAKE>(user1, 100);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345)]
     fun test_withdraw(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer, user2: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
 
         account::create_account_for_test(signer::address_of(user1));
         account::create_account_for_test(signer::address_of(user2));
-        managed_coin::register<Cake>(user1);
-        managed_coin::register<Cake>(user2);
+        managed_coin::register<CakeOFT>(user1);
+        managed_coin::register<CakeOFT>(user2);
 
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * pow(10, 8));
         register_and_mint<TestCAKE>(resource_account, user2, 1000 * pow(10, 8));
@@ -1197,26 +1201,26 @@ module pancake_masterchef::masterchef_test {
         assert!(coin::balance<TestCAKE>(signer::address_of(user2)) == 99999999900 , DEFAULT_ERROR_CODE);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
     #[expected_failure(abort_code = 10)]
     fun test_withdraw_user_not_exist(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
         account::create_account_for_test(signer::address_of(user1));
-        managed_coin::register<Cake>(user1);
+        managed_coin::register<CakeOFT>(user1);
 
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * pow(10, 8));
 
         masterchef::withdraw<TestCAKE>(user1, 100);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
     #[expected_failure(abort_code = 2)]
     fun test_withdraw_wrong_lp_token(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
         account::create_account_for_test(signer::address_of(user1));
-        managed_coin::register<Cake>(user1);
+        managed_coin::register<CakeOFT>(user1);
 
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * pow(10, 8));
 
@@ -1224,13 +1228,13 @@ module pancake_masterchef::masterchef_test {
         masterchef::withdraw<TestBUSD>(user1, 100);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
     #[expected_failure(abort_code = 4)]
     fun test_withdraw_insufficient_amount(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
         account::create_account_for_test(signer::address_of(user1));
-        managed_coin::register<Cake>(user1);
+        managed_coin::register<CakeOFT>(user1);
 
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * pow(10, 8));
 
@@ -1241,15 +1245,15 @@ module pancake_masterchef::masterchef_test {
         masterchef::withdraw<TestCAKE>(user1, 1);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234, user2 = @0x2345)]
     fun test_emergency_withdraw(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer, user2: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
 
         account::create_account_for_test(signer::address_of(user1));
         account::create_account_for_test(signer::address_of(user2));
-        managed_coin::register<Cake>(user1);
-        managed_coin::register<Cake>(user2);
+        managed_coin::register<CakeOFT>(user1);
+        managed_coin::register<CakeOFT>(user2);
 
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * pow(10, 8));
         register_and_mint<TestCAKE>(resource_account, user2, 1000 * pow(10, 8));
@@ -1276,26 +1280,26 @@ module pancake_masterchef::masterchef_test {
         assert!(coin::balance<TestCAKE>(signer::address_of(user2)) == 100000000000, DEFAULT_ERROR_CODE);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
     #[expected_failure(abort_code = 10)]
     fun test_emergency_withdraw_user_not_exist(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
         account::create_account_for_test(signer::address_of(user1));
-        managed_coin::register<Cake>(user1);
+        managed_coin::register<CakeOFT>(user1);
 
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * pow(10, 8));
 
         masterchef::emergency_withdraw<TestCAKE>(user1);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
     #[expected_failure(abort_code = 2)]
     fun test_emergency_withdraw_wrong_lp_token(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
         account::create_account_for_test(signer::address_of(user1));
-        managed_coin::register<Cake>(user1);
+        managed_coin::register<CakeOFT>(user1);
 
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * pow(10, 8));
 
@@ -1303,13 +1307,13 @@ module pancake_masterchef::masterchef_test {
         masterchef::emergency_withdraw<TestBUSD>(user1);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, user1 = @0x1234)]
     #[expected_failure(abort_code = 4)]
     fun test_emergency_withdraw_insufficient_amount(dev: &signer, admin: &signer, resource_account: &signer, user1: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
         account::create_account_for_test(signer::address_of(user1));
-        managed_coin::register<Cake>(user1);
+        managed_coin::register<CakeOFT>(user1);
 
         register_and_mint<TestCAKE>(resource_account, user1, 1000 * pow(10, 8));
 
@@ -1326,7 +1330,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::add_pool<CoinType>(admin, alloc_point, is_regular, with_update);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     fun before_add_multiple_pool(dev: &signer, resource_account: &signer, admin: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, true, true);
@@ -1337,14 +1341,14 @@ module pancake_masterchef::masterchef_test {
         assert!(masterchef::pool_length() == 4, DEFAULT_ERROR_CODE);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     #[expected_failure(abort_code = 1)]
     fun test_add_pool_not_publish(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
         masterchef::add_pool<TestCAKE>(admin, 1000, true, true);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     #[expected_failure(abort_code = 0)]
     fun test_add_pool_not_admin(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
@@ -1361,7 +1365,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::add_pool<TestCAKE>(&random, 1000, true, true);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     #[expected_failure(abort_code = 3)]
     fun test_add_pool_exist_token(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
@@ -1378,7 +1382,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::add_pool<TestCAKE>(admin, 1000, true, true);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     #[expected_failure(abort_code = 9)]
     fun test_add_pool_wrong_decimal(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
@@ -1394,7 +1398,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::add_pool<TestCAKE>(admin, 1000, true, true);
     }
 
-    // #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    // #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     // fun test_update_cake_per_second(dev: &signer, admin: &signer, resource_account: &signer) {
     //     before_each(dev, admin, resource_account);
     //     before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, false, true);
@@ -1405,7 +1409,7 @@ module pancake_masterchef::masterchef_test {
     //     assert!(cake_per_second == 1000000000, DEFAULT_ERROR_CODE);
     // }
 
-    // #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    // #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     // #[expected_failure(abort_code = 0)]
     // fun test_update_cake_per_second_not_admin(dev: &signer, admin: &signer, resource_account: &signer) {
     //     before_each(dev, admin, resource_account);
@@ -1414,7 +1418,7 @@ module pancake_masterchef::masterchef_test {
 
     // }
 
-    // #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    // #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     // #[expected_failure(abort_code = 6)]
     // fun test_update_cake_per_second_exceed_limit(dev: &signer, admin: &signer, resource_account: &signer) {
     //     before_each(dev, admin, resource_account);
@@ -1422,7 +1426,7 @@ module pancake_masterchef::masterchef_test {
     //     masterchef::update_cake_per_second(admin, max_per_second + 1, true);
     // }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     fun test_update_cake_rate(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, false, true);
@@ -1436,7 +1440,7 @@ module pancake_masterchef::masterchef_test {
         assert!(_special_rate == special_rate, DEFAULT_ERROR_CODE);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     #[expected_failure(abort_code = 0)]
     fun test_update_cake_rate_not_admin(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
@@ -1447,7 +1451,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::update_cake_rate(dev, regular_rate, special_rate, true);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     #[expected_failure(abort_code = 5)]
     fun test_update_cake_rate_invalid_rate(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
@@ -1460,7 +1464,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::update_cake_rate(dev, regular_rate, special_rate, true);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     fun test_set_pool(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
         before_add_pool<TestCAKE>(resource_account, admin, b"CAKE", b"CAKE", 1000, false, true);
@@ -1471,7 +1475,7 @@ module pancake_masterchef::masterchef_test {
         assert!(alloc_point == 1000, DEFAULT_ERROR_CODE);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     #[expected_failure(abort_code = 0)]
     fun test_set_pool_not_admin(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
@@ -1480,7 +1484,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::set_pool(dev, 0, 1000, true);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     #[expected_failure(abort_code = 6)]
     fun test_set_pool_pid_not_exsit(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
@@ -1488,7 +1492,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::set_pool(admin, 0, 1000, true);
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, new_admin = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, new_admin = @0x1234)]
     fun test_set_admin(dev: &signer, admin: &signer, resource_account: &signer, new_admin: &signer) {
         before_each(dev, admin, resource_account);
 
@@ -1504,7 +1508,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::set_admin(new_admin, signer::address_of(admin));
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef, new_admin = @0x1234)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef, new_admin = @0x1234)]
     #[expected_failure(abort_code = 0)]
     fun test_set_admin_not_admin(dev: &signer, admin: &signer, resource_account: &signer, new_admin: &signer) {
         before_each(dev, admin, resource_account);
@@ -1515,7 +1519,7 @@ module pancake_masterchef::masterchef_test {
         masterchef::set_admin(dev, signer::address_of(new_admin));
     }
 
-    #[test(dev = @masterchef_dev, admin= @admin, resource_account = @pancake_masterchef)]
+    #[test(dev = @masterchef_origin, admin= @msterchef_admin, resource_account = @pancake_masterchef)]
     #[expected_failure(abort_code = 11)]
     fun test_set_admin_with_zero_account(dev: &signer, admin: &signer, resource_account: &signer) {
         before_each(dev, admin, resource_account);
@@ -1529,11 +1533,14 @@ module pancake_masterchef::masterchef_test {
         if (!account::exists_at(signer::address_of(admin))){
              account::create_account_for_test(signer::address_of(admin));
         };
-        resource_account::create_resource_account(dev, b"pancake-swap-masterchef", x"");
+        resource_account::create_resource_account(dev, b"pancake-masterchef", x"");
         masterchef::initialize(masterchef);
-        // CAKE token initialize
-        pancake::initialize(dev);
-        pancake::transfer_ownership(dev, signer::address_of(masterchef));
+        // APT initialize
+        let aptos_core_signer = account::create_account_for_test(APTOS_CORE);
+        init_coins<APT>(&aptos_core_signer, b"APT", b"APT");
+        // CAKE OFT token initialize
+        let cake_oft_signer = account::create_account_for_test(OFT);
+        init_coins<CakeOFT>(&cake_oft_signer, b"CAKE", b"CAKE");
     }
 
     #[test_only]
