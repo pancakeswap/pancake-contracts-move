@@ -14,7 +14,6 @@ module pancake::swap {
 
     use pancake::math;
     use pancake::swap_utils;
-    use pancake::u256;
 
     friend pancake::router;
 
@@ -562,9 +561,9 @@ module pancake::swap {
         let compare_result = if(balance_x_adjusted > 0 && reserve_x_adjusted > 0 && MAX_U128 / balance_x_adjusted > balance_y_adjusted && MAX_U128 / reserve_x_adjusted > reserve_y_adjusted){
             balance_x_adjusted * balance_y_adjusted >= reserve_x_adjusted * reserve_y_adjusted
         }else{
-            let p = u256::mul_u128(balance_x_adjusted, balance_y_adjusted);
-            let k = u256::mul_u128(reserve_x_adjusted, reserve_y_adjusted);
-            u256::ge(&p, &k)
+            let p: u256 = (balance_x_adjusted as u256) * (balance_y_adjusted as u256);
+            let k: u256 = (reserve_x_adjusted as u256) * (reserve_y_adjusted as u256);
+            p >= k
         };
         assert!(compare_result, ERROR_K);
 
@@ -734,6 +733,58 @@ module pancake::swap {
             check_or_register_coin_store<LPToken<Y, X>>(sender);
             coin::deposit(sender_addr, coin);
         };
+    }
+
+    /// This is a version of withdraw_fee() which can be invoked by anyone.
+    /// This is useful for back-end scripts for automatically funneling fees
+    /// to the multisig.
+    ///
+    /// Note: withdraw_fee() should be called at least once in LPs lifetime in
+    /// order to register the coin conveniently, although other approaches are
+    /// also possible.
+    ///
+    /// If this function would have been developed alongside the other code,
+    /// the logic shared with withdraw_fee() and withdraw_fee_noauth() should
+    /// have been placed into its own function.
+    ///
+    /// However, since the code is already audited and deployed, changing the
+    /// existing code now would risk regressions. Hence, recycling the old code
+    /// as-is could be considered a best practice.
+    ///
+    /// Reusing code does not remove the need for audit, but greatly increases
+    /// changes of passing one.
+    public entry fun withdraw_fee_noauth<X, Y>() acquires SwapInfo, TokenPairMetadata {
+        let swap_info = borrow_global<SwapInfo>(RESOURCE_ACCOUNT);
+
+        if (swap_utils::sort_token_type<X, Y>()) {
+            let metadata = borrow_global_mut<TokenPairMetadata<X, Y>>(RESOURCE_ACCOUNT);
+            assert!(coin::value(&metadata.fee_amount) > 0, ERROR_NO_FEE_WITHDRAW);
+            let coin = coin::extract_all(&mut metadata.fee_amount);
+            coin::deposit(swap_info.fee_to, coin);
+        } else {
+            let metadata = borrow_global_mut<TokenPairMetadata<Y, X>>(RESOURCE_ACCOUNT);
+            assert!(coin::value(&metadata.fee_amount) > 0, ERROR_NO_FEE_WITHDRAW);
+            let coin = coin::extract_all(&mut metadata.fee_amount);
+            coin::deposit(swap_info.fee_to, coin);
+        };
+    }
+    /// This spec is not yet verified, and is provided only for
+    /// illustrative purposes:
+    spec withdraw_fee_noauth {
+        aborts_if !exists<SwapInfo>(RESOURCE_ACCOUNT);
+        let swap_info = borrow_global_mut<SwapInfo>(RESOURCE_ACCOUNT);
+
+        aborts_if !coin::is_account_registered<LPToken<X, Y>>(swap_info.fee_to);
+        aborts_if !exists<TokenPairMetadata<X, Y>>(RESOURCE_ACCOUNT);
+
+        aborts_if !coin::is_account_registered<LPToken<Y, X>>(swap_info.fee_to);
+        aborts_if !exists<TokenPairMetadata<Y, X>>(RESOURCE_ACCOUNT);
+
+        let metadata1 = borrow_global_mut<TokenPairMetadata<X, Y>>(RESOURCE_ACCOUNT);
+        aborts_if coin::value(metadata1.fee_amount) == 0;
+
+        let metadata2 = borrow_global_mut<TokenPairMetadata<Y, X>>(RESOURCE_ACCOUNT);
+        aborts_if coin::value(metadata2.fee_amount) == 0;
     }
 
     public entry fun upgrade_swap(sender: &signer, metadata_serialized: vector<u8>, code: vector<vector<u8>>) acquires SwapInfo {

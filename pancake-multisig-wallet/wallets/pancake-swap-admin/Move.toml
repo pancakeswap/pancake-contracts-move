@@ -1,0 +1,17 @@
+[package]
+name = "PancakeSwapAdmin"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+PancakeMultisigWallet = { local = "../../" }
+PancakeSwap = { local = "../../../pancake-swap" }
+
+[addresses]
+# resource account seed is pancake_swap_admin
+pancake_swap_admin = "aba9f4cd10cbbe9e080c319a4d49f8206cd12b74378516b2ca222c29f5f91e7e"
+pancake_swap_admin_dev = "088abe925e47e0872d15b50561846907a2361e6011980cee9c8ecafb15ca633a"
+pancake_swap_admin_owner1 = "7ba51953163f85467b6c8329e3dc4cafc4c4e6e8cb4311a85d292a36e4fb3f32"
+pancake_swap_admin_owner2 = "ee45805c0c1133134969f0b7e4c335b2d686a2909f007334f40a36892baf23bf"
+pancake_swap_admin_owner3 = "e2779e742435ea6303dc97124949aeb0337ecc8cfab44b494f7f89d773dcb2fb"

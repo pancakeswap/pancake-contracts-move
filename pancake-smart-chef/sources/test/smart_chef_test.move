@@ -423,7 +423,7 @@ module pancake::smart_chef_test {
 
         let start_time = timestamp::now_seconds() + 10;
         let end_time = start_time + 100;
-        create_pool<TestCAKE, TestBUSD, U0>(dev, 1, start_time, end_time, 0, 0);
+        create_pool<TestCAKE, TestBUSD, U0>(bob, 1, start_time, end_time, 0, 0);
     }
 
     #[test(dev = @pancake_smart_chef_dev, admin = @pancake_smart_chef_default_admin, resource_account = @pancake, treasury = @0x23456, bob = @0x12345, alice = @0x12346)]
@@ -779,7 +779,7 @@ module pancake::smart_chef_test {
         let start_time = timestamp::now_seconds() + 10;
         let end_time = start_time + 100;
         create_pool<TestCAKE, TestBUSD, U0>(admin, 1, start_time, end_time, 10, 1000);
-        add_reward<TestCAKE, TestBUSD, U0>(dev, 100);
+        add_reward<TestCAKE, TestBUSD, U0>(bob, 100);
     }
 
     #[test(dev = @pancake_smart_chef_dev, admin = @pancake_smart_chef_default_admin, resource_account = @pancake, treasury = @0x23456, bob = @0x12345, alice = @0x12346)]

@@ -1,0 +1,16 @@
+[package]
+name = "PancakeSmartChefMultisigWallet"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+PancakeMultisigWallet = { local = "../../" }
+PancakeSmartChef = { local = "../../../pancake-smart-chef" }
+
+[addresses]
+pancake_smart_chef_multisig_wallet = "0xd97268666bad31a7299cc80c1bca26face32718630c5498544fe8e9bcc593d74"
+pancake_smart_chef_multisig_wallet_dev = "0xdb879227e7075058e263d6957bb40ca3f4e5f66ea0691f723c5b9095d9cae253"
+pancake_smart_chef_multisig_wallet_owner1 = "0x2e7a6193f23bbab1c8950d743b836619c132c97210abec5941bdac9bd7af4aba"
+pancake_smart_chef_multisig_wallet_owner2 = "0x9283ac804a758840e109701dc20f9848798aeef775fa072b33d9966f50b7a4a4"
+pancake_smart_chef_multisig_wallet_owner3 = "0x41264f98d87846557e3187b5a33eb5ebe87fd10d96a12b6dd42a0e96e69c9a2e"

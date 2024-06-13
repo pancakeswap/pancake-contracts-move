@@ -1,0 +1,15 @@
+[package]
+name = "PancakePeriphery"
+version = "0.0.1"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+AptosStdlib = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-stdlib/", rev = "2a458b5ffaaf6a9de6fac679a53912c0be9fe217" }
+PancakeSwap = { local = "../pancake-swap" }
+PancakeMasterchef = { local = "../pancake-masterchef" }
+
+[addresses]
+# periphery resouce account(generated from origin account), seed: pancake-periphery
+pancake_periphery = "f6a27036c19db9c6398778fe1722486ee2c50c0fe01ce0cd5554e7d8d0cb1adf"
+# origin account which create resource account
+periphery_origin = "87f6a9c239ad8cb0e933f73095b25e53a8a61e0e5d9d1d8a39c4a3f3651791ec"
